@@ -248,6 +248,8 @@ The OP_RETURN payload is 38 bytes:
 
 **Chain verification** checks: each cert's `previous_cert_id` links to the prior cert's `cert_id`, the same creator throughout, valid signatures on every cert, and the final cert's type determines the chain status (ACTIVE or REVOKED).
 
+For the full protocol design, threat model, and technical specification, see the [Research](#research) section.
+
 ## Development
 
 ```bash
@@ -281,8 +283,9 @@ agentcert/
     types.py             # KeyPair, Certificate, AgentMetadata, etc.
     exceptions.py        # Custom exception hierarchy
     cli.py               # Click-based CLI (8 commands)
-  tests/                 # 118 tests, 93% coverage
+  tests/                 # 119 tests, 93% coverage
   examples/              # quickstart.py, full_lifecycle.py
+  papers/                # Whitepaper, technical spec, condensed overview
 ```
 
 ## Technical Decisions
@@ -297,6 +300,14 @@ agentcert/
 | CLI | Click | Mature, clean subcommand support |
 | Bitcoin API | Blockstream | No auth, free, reliable |
 | Dependencies | 3 runtime | `cryptography`, `requests`, `click` |
+
+## Research
+
+AgentCert implements AIT-1 from the Agent Internet Trust protocol. The research papers cover the full protocol design, adversarial analysis, and technical specification:
+
+- [**Whitepaper**](papers/whitepaper.pdf) — Protocol motivation, architecture, trust model, and threat analysis
+- [**Condensed Overview**](papers/condensed.pdf) — Shorter summary of the protocol and its design rationale
+- [**Technical Specification**](papers/technical-spec.pdf) — Formal specification of certificate structure, signing, anchoring, and verification
 
 ## License
 
