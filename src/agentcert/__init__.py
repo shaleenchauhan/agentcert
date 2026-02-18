@@ -92,6 +92,16 @@ from agentcert.types import (
     VerificationResult,
 )
 
+# ── Integrations (optional) ───────────────────────────────────────────────────
+
+try:
+    from agentcert.integrations.langchain import (
+        AgentCertCallbackHandler,
+        AgentCertMiddleware,
+    )
+except ImportError:
+    pass
+
 # ── Exceptions ───────────────────────────────────────────────────────────────
 
 from agentcert.exceptions import (
@@ -154,6 +164,9 @@ __all__ = [
     "AuditVerificationCheck",
     "AuditVerificationResult",
     "AuditTrailVerificationResult",
+    # Integrations (available when langchain is installed)
+    "AgentCertCallbackHandler",
+    "AgentCertMiddleware",
     # Exceptions
     "AgentCertError",
     "KeyGenerationError",

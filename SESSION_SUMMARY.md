@@ -1,141 +1,152 @@
-# AgentCert — Build Session Summary
+# AgentCert — LangChain Integration Session Summary
 
-## Project State
+## Overview
 
-**Status: Feature-complete, tested, ready for GitHub publish.**
+Added LangChain middleware to AgentCert (Phase 2). Developers can now add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as ECDSA-signed, hash-chained audit entries.
 
-AgentCert v0.1.0 is a fully functional Python SDK + CLI for creating, signing, anchoring, and verifying Bitcoin-anchored identity certificates for AI agents. The implementation follows the AIT-1 (Agent Identity Certificates) specification from the Agent Internet Trust protocol.
+## Build Steps
 
-The package installs cleanly via `pip install -e ".[dev]"` on Python 3.11+ and all 118 tests pass at 93% code coverage.
+| Step | Description | Status |
+|------|-------------|--------|
+| 1 | Setup — `langchain-core` optional dependency, `integrations/` package | Done |
+| 2 | `AgentCertCallbackHandler` — `BaseCallbackHandler` subclass, buffers start events, creates signed entries on end events, handles errors | Done |
+| 3 | `AgentCertMiddleware` — creates cert + trail, `wrap()` injects callback, accessors, save/load | Done |
+| 4 | Tests — 67 new tests (191 → 258 total), all passing | Done |
+| 5 | Public API — conditional export in `__init__.py` (49 → 51 exports) | Done |
+| 6 | Example — `examples/langchain_demo.py` | Done |
+| 7 | README — LangChain integration section, updated install/structure/development | Done |
 
-## Files Produced
+## Files Created
 
-### Package Source (src/agentcert/)
+| File | Description |
+|------|-------------|
+| `src/agentcert/integrations/__init__.py` | Package init for framework integrations |
+| `src/agentcert/integrations/langchain.py` | `AgentCertCallbackHandler` + `AgentCertMiddleware` (~450 lines) |
+| `tests/test_langchain_integration.py` | 67 tests across 12 test classes |
+| `examples/langchain_demo.py` | Full lifecycle demo with simulated LangChain events |
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `__init__.py` | 131 | Public API — 33 exports (15 functions, 8 types, 9 exceptions, `__version__`) |
-| `keys.py` | 79 | `generate_keys()`, `save_keys()`, `load_keys()` — secp256k1 via `cryptography` |
-| `types.py` | 199 | `KeyPair`, `Certificate`, `AgentMetadata`, `CertType`, `AnchorReceipt`, `VerificationCheck`, `VerificationResult`, `ChainResult` — all frozen dataclasses |
-| `exceptions.py` | 33 | 9 custom exceptions: `AgentCertError` base + 8 specific subclasses |
-| `certificate.py` | 141 | `create_certificate()`, `save_certificate()`, `load_certificate()` — ECDSA signing, SHA-256 cert_id |
-| `chain.py` | 296 | `update_certificate()`, `revoke_certificate()`, `verify_chain()` — chain linking + full chain verification |
-| `anchor.py` | 331 | OP_RETURN construction, P2PKH transaction building, Blockstream API broadcast, `anchor()`, `derive_bitcoin_address()`, receipt save/load |
-| `verify.py` | 118 | 6 individual check functions + `verify()` — structured `VerificationResult` |
-| `cli.py` | 258 | 8 Click subcommands: keygen, create, inspect, verify, update, revoke, anchor, verify-chain |
+## Files Modified
 
-### Tests (tests/)
-
-| File | Tests | Coverage Target |
-|------|-------|----------------|
-| `test_keys.py` | 11 | Key generation, save/load round-trips, tamper detection, error paths |
-| `test_certificate.py` | 22 | Creation, cert_id integrity, ECDSA signatures, serialization, input validation |
-| `test_chain.py` | 22 | Update, revoke, chain verification, all guard clauses |
-| `test_anchor.py` | 30 | OP_RETURN format, Bitcoin helpers, address derivation, mocked Blockstream API |
-| `test_verify.py` | 19 | All 6 individual checks (valid + tampered), full verify flow |
-| `test_integration.py` | 14 | Full lifecycle, file round-trips, API completeness, CLI smoke tests |
-| **Total** | **118** | **93% line coverage** |
-
-### Other Files
-
-| File | Purpose |
+| File | Changes |
 |------|---------|
-| `pyproject.toml` | PEP 621 packaging, Python 3.11+, deps, CLI entry point, pytest config |
-| `README.md` | 303 lines — install, quickstart, full API reference, CLI guide, architecture |
-| `LICENSE` | MIT |
-| `.gitignore` | Python, IDE, OS, keys/certs patterns |
-| `CLAUDE.md` | Build specification (pre-existing) |
-| `examples/quickstart.py` | 5-minute demo — generate, create, verify, save/load |
-| `examples/full_lifecycle.py` | Complete walkthrough — create, verify, anchor hash, update, revoke, chain verify |
+| `pyproject.toml` | Added `[project.optional-dependencies] langchain = ["langchain-core>=0.1.0"]` |
+| `src/agentcert/__init__.py` | Conditional import of `AgentCertCallbackHandler` and `AgentCertMiddleware` (49 → 51 exports) |
+| `README.md` | Added LangChain integration section (SDK API + usage), updated install instructions, project structure, development section |
 
-## Package Readiness
+## Architecture
 
-| Criterion | Status |
-|-----------|--------|
-| `pip install -e .` works | Yes |
-| `import agentcert` works | Yes |
-| All public API functions accessible at top level | Yes (33 symbols) |
-| CLI entry point `agentcert` registered | Yes (8 subcommands) |
-| Type hints on all public functions | Yes |
-| Docstrings on all public functions | Yes |
-| Custom exceptions (no bare except) | Yes |
-| Frozen dataclasses for all return types | Yes |
-| Deterministic JSON serialization | Yes (sort_keys, compact separators) |
-| Tests pass | 118/118 |
-| Coverage | 93% |
-| README with quickstart | Yes |
-| Examples run standalone | Yes |
-| MIT license | Yes |
+### AgentCertCallbackHandler
 
-## Test Coverage Detail
+A `BaseCallbackHandler` subclass that converts LangChain callback events into signed audit entries.
+
+**Event handling strategy (Option B):** Buffers `on_*_start` events keyed by `run_id`, creates a single signed audit entry on the corresponding `on_*_end` event with complete information (input, output hash, duration). Error events create error entries immediately.
+
+**Events handled:**
+
+| Event pair | ActionType | What's logged |
+|-----------|------------|---------------|
+| `on_llm_start` / `on_llm_end` | `API_CALL` | Model name, prompt hash, output hash, duration |
+| `on_chat_model_start` / `on_llm_end` | `API_CALL` | Same as above (chat models) |
+| `on_tool_start` / `on_tool_end` | `TOOL_USE` | Tool name, input, output hash, duration |
+| `on_agent_action` | `DECISION` | Tool selection, tool input, reasoning log |
+| `on_agent_finish` | `DECISION` | Output hash, final log |
+| `on_chain_start` / `on_chain_end` | `API_CALL` | Chain name, output hash (verbose only) |
+| `on_*_error` | `ERROR` | Error type, message, context |
+
+**Privacy:** LLM prompts, responses, and tool outputs are stored as SHA-256 hashes only. The audit trail proves what happened without exposing raw data.
+
+**Log levels:**
+
+| Level | What's captured |
+|-------|----------------|
+| `MINIMAL` | Tools + agent decisions only |
+| `STANDARD` | Tools + decisions + LLM calls (default) |
+| `VERBOSE` | Everything including top-level chain events |
+
+### AgentCertMiddleware
+
+High-level convenience wrapper that handles the full lifecycle:
+
+1. Accepts `creator_keys` and `agent_keys` as file paths or `KeyPair` objects
+2. Creates an identity certificate on init (or accepts an existing one)
+3. Creates an audit trail bound to the certificate
+4. Creates a callback handler wired to the trail
+5. `wrap(executor)` injects the callback into any object with a `callbacks` attribute
+6. Accessors: `get_certificate()`, `get_trail()`, `get_entries()` (with filtering), `get_handler()`, `verify()`
+7. `save(directory)` persists certificate + trail as JSON
+8. `load(directory, agent_keys)` restores state and allows continued logging
+
+## Test Count
+
+| | Before | After | Delta |
+|-|--------|-------|-------|
+| Tests | 191 | 258 | +67 |
+
+### New test classes
+
+| Test class | Count | Covers |
+|------------|-------|--------|
+| `TestHelpers` | 9 | `_sha256_hash`, `_extract_model_name`, `_extract_tool_name` |
+| `TestCallbackHandlerInit` | 5 | Construction, properties, log level validation |
+| `TestToolEvents` | 8 | Start/end pairing, run_id tracking, errors, output hashing, minimal mode |
+| `TestLLMEvents` | 10 | Start/end pairing, prompt/response hashing, errors, chat model, minimal, fallback |
+| `TestAgentEvents` | 4 | Agent action/finish, minimal mode |
+| `TestChainEvents` | 7 | Standard/minimal ignored, verbose logged, nested chains, errors |
+| `TestCallbackTrailVerification` | 2 | Full trail validity, hash chain integrity |
+| `TestMiddlewareInit` | 4 | Certificate creation, metadata, existing cert, keys from file |
+| `TestMiddlewareWrap` | 4 | Callback injection, None callbacks, preserving existing, no-attr error |
+| `TestMiddlewareAccessors` | 5 | get_entries, filtering, verify, get_handler |
+| `TestMiddlewareSaveLoad` | 8 | Save files, JSON validity, roundtrip, verify, continue logging, error cases |
+| `TestMiddlewareLifecycle` | 1 | Full end-to-end lifecycle simulation (5 events) |
+
+## API Exports (51 total, +2 new)
+
+### New exports
+
+- `AgentCertCallbackHandler` — LangChain `BaseCallbackHandler` subclass (conditionally available when `langchain-core` is installed)
+- `AgentCertMiddleware` — High-level wrapper for certificate + audit trail + callback handler (conditionally available)
+
+Also available via direct import:
+
+```python
+from agentcert.integrations.langchain import (
+    AgentCertCallbackHandler,
+    AgentCertMiddleware,
+    MINIMAL,
+    STANDARD,
+    VERBOSE,
+)
+```
+
+## Coverage
 
 ```
-Name                           Stmts   Miss  Cover
-------------------------------------------------------------
-src/agentcert/__init__.py          9      0   100%
-src/agentcert/anchor.py          171     19    89%
-src/agentcert/certificate.py      46      6    87%
-src/agentcert/chain.py            82      2    98%
-src/agentcert/cli.py             186     20    89%
-src/agentcert/exceptions.py        9      0   100%
-src/agentcert/keys.py             37      2    95%
-src/agentcert/types.py            96      0   100%
-src/agentcert/verify.py           62      2    97%
-------------------------------------------------------------
-TOTAL                            698     51    93%
+Name                                      Stmts   Miss  Cover
+-----------------------------------------------------------------------
+src/agentcert/__init__.py                    15      2    87%
+src/agentcert/anchor.py                     200     17    92%
+src/agentcert/audit.py                       83      4    95%
+src/agentcert/audit_verify.py               122      2    98%
+src/agentcert/certificate.py                 46      6    87%
+src/agentcert/chain.py                       82      2    98%
+src/agentcert/cli.py                        275     77    72%
+src/agentcert/exceptions.py                  10      0   100%
+src/agentcert/integrations/__init__.py        0      0   100%
+src/agentcert/integrations/langchain.py     183      6    97%
+src/agentcert/keys.py                        37      2    95%
+src/agentcert/types.py                      163      1    99%
+src/agentcert/verify.py                      62      2    97%
+-----------------------------------------------------------------------
+TOTAL                                      1278    121    91%
 ```
 
-Uncovered lines are primarily: CLI `anchor` command (requires live API), error branches in transaction building that need malformed inputs, and minor exception re-raise paths.
+New integration module: `langchain.py` at 97%. Overall project coverage 91%.
 
-## What Works End-to-End
+## Open Items
 
-1. **Key generation** — secp256k1 compressed keys, save/load as JSON
-2. **Certificate creation** — signed with ECDSA, cert_id = SHA-256 of body
-3. **Verification** — 6 checks with structured pass/fail results
-4. **Certificate updates** — linked chain, metadata carry-over
-5. **Certificate revocation** — with reason, terminates chain
-6. **Chain verification** — linkage, creator consistency, signature validity, status determination
-7. **OP_RETURN payload** — 38-byte AIT format, matches the real testnet anchor
-8. **Bitcoin transaction building** — P2PKH input, OP_RETURN + change outputs, ECDSA signing
-9. **Blockstream API integration** — UTXO fetch, broadcast (tested with mocked responses)
-10. **Bitcoin address derivation** — Hash160 + Base58Check, testnet/mainnet
-11. **CLI** — all 8 commands with colored output and error handling
-12. **File I/O** — round-trip save/load for keys, certificates, and receipts
-
-## Open Items for Launch
-
-### Before Publishing to PyPI
-
-- [ ] **Update repository URLs** in `pyproject.toml` — currently placeholder `github.com/shaleen/agentcert`
-- [ ] **Author email** — add to `pyproject.toml` authors field
-- [ ] **Initial git commit** — stage and commit all source files
-- [ ] **Build distribution** — `python -m build` and verify `.whl` and `.tar.gz`
-- [ ] **PyPI upload** — `twine upload dist/*` (need PyPI account + token)
-
-### Recommended Before v0.2.0
-
-- [ ] **Live testnet anchor test** — fund a testnet address and run `anchor()` against real Blockstream API
-- [ ] **On-chain verification** — add optional `verify_on_chain=True` to `verify()` that queries the Blockstream API to confirm the OP_RETURN exists in the actual blockchain
-- [ ] **`docs/architecture.md`** — detailed architecture document (placeholder dir exists)
-- [ ] **`docs/bitcoin-anchoring.md`** — deep-dive on the anchoring protocol
-- [ ] **GitHub Actions CI** — pytest + coverage on Python 3.11/3.12/3.13
-- [ ] **Pre-commit hooks** — ruff linter, type checking with mypy
-
-### Future Considerations
-
-- [ ] Schnorr signature support (BIP-340) — upgrade path from ECDSA
-- [ ] CBOR serialization — more compact than JSON, mentioned in spec
-- [ ] Merkle root aggregation (payload type 0x01) — batch multiple certs into one anchor
-- [ ] Bond commitment support (payload type 0x04)
-- [ ] SegWit transaction support — smaller anchor transactions, lower fees
-- [ ] Mainnet deployment guide
-- [ ] Async API variant (httpx instead of requests)
-
-## Recommended Next Steps
-
-1. Create the initial git commit with all files
-2. Set up GitHub repo with the correct URL
-3. Run `python -m build` to verify package builds
-4. Fund a testnet address and do a live anchor test
-5. Set up GitHub Actions for CI
-6. Publish to PyPI as v0.1.0
+- **PyPI re-publish**: Package on PyPI is v0.1.0 and does not include the audit trail or LangChain integration. A version bump to v0.2.0 and re-publish is needed.
+- **Real LangChain test**: The demo simulates callback events. A test with a real `AgentExecutor` (requires `langchain` + `langchain-openai` + API key) would confirm end-to-end behavior.
+- **Async support**: The callback handler is synchronous. LangChain also supports `AsyncCallbackHandler` for async agents.
+- **Other frameworks**: CrewAI, AutoGen, and other agent frameworks could get similar integrations under `agentcert.integrations.*`.
+- **Audit trail anchoring**: The trail itself is not anchored to Bitcoin. A future phase could anchor the trail's final entry_id or a Merkle root.
+- **GitHub Actions CI**: No CI pipeline yet. Should test with and without `langchain-core` installed to verify conditional imports.

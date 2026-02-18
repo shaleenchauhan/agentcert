@@ -24,6 +24,12 @@ pip install -e ".[dev]"
 
 Requires Python 3.11+. Dependencies: `cryptography`, `requests`, `click`.
 
+For LangChain integration:
+
+```bash
+pip install agentcert[langchain]
+```
+
 ## Quickstart
 
 ```python
@@ -258,6 +264,58 @@ Entry verification runs 6 checks: entry_id integrity, agent_id derivation, agent
 
 Trail verification runs 11 checks: non-empty trail, trail_id/cert_id/agent consistency, first-entry linkage, hash-chain integrity, sequence continuity, timestamp ordering, all entry IDs, all signatures, and certificate binding.
 
+### LangChain Integration
+
+Add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as signed audit entries.
+
+```python
+from agentcert.integrations.langchain import AgentCertMiddleware
+
+# Create middleware (generates certificate + audit trail)
+middleware = AgentCertMiddleware(
+    creator_keys="creator.keys.json",    # path or KeyPair
+    agent_keys="agent.keys.json",        # path or KeyPair
+    agent_name="procurement-agent-v1",
+    capabilities=["procurement", "negotiation"],
+    constraints=["max-transaction-50000-usd"],
+    risk_tier=3,
+)
+
+# Wrap your executor — all actions are logged automatically
+executor = middleware.wrap(executor)
+result = executor.invoke({"input": "Find the cheapest supplier"})
+
+# Verify the audit trail (11 checks)
+verification = middleware.verify()
+print(verification.status)  # "VALID"
+
+# Inspect entries
+for entry in middleware.get_entries():
+    print(f"[{entry.sequence}] {entry.action_summary}")
+
+# Filter by type
+tools = middleware.get_entries(action_type=agentcert.ActionType.TOOL_USE)
+
+# Save everything (certificate + trail)
+middleware.save("./agent-audit/")
+
+# Reload and continue logging
+loaded = AgentCertMiddleware.load("./agent-audit/", agent_keys="agent.keys.json")
+```
+
+For more control, use the callback handler directly:
+
+```python
+from agentcert.integrations.langchain import AgentCertCallbackHandler
+
+handler = AgentCertCallbackHandler(trail, agent_keys)
+result = executor.invoke({"input": "..."}, config={"callbacks": [handler]})
+```
+
+**Privacy:** LLM prompts, responses, and tool outputs are stored as SHA-256 hashes only — the trail proves what happened without exposing raw data.
+
+**Log levels:** `"minimal"` (tools + decisions only), `"standard"` (default — adds LLM calls), `"verbose"` (adds chain events).
+
 ### Bitcoin Anchoring
 
 Anchor a certificate to Bitcoin via an OP_RETURN transaction:
@@ -334,7 +392,7 @@ For the full protocol design, threat model, and technical specification, see the
 git clone https://github.com/shaleenchauhan/agentcert.git
 cd agentcert
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,langchain]"
 
 # Run tests
 pytest
@@ -346,6 +404,7 @@ pytest --cov=agentcert --cov-report=term-missing
 python examples/quickstart.py
 python examples/full_lifecycle.py
 python examples/audit_trail_demo.py
+python examples/langchain_demo.py
 ```
 
 ## Project Structure
@@ -353,7 +412,7 @@ python examples/audit_trail_demo.py
 ```
 agentcert/
   src/agentcert/
-    __init__.py          # Public API (49 exports, no submodule imports needed)
+    __init__.py          # Public API (51 exports, no submodule imports needed)
     keys.py              # Key generation, save, load (secp256k1)
     certificate.py       # Certificate creation, signing, serialization
     chain.py             # Update, revoke, chain verification
@@ -361,11 +420,13 @@ agentcert/
     verify.py            # 6-check certificate verification
     audit.py             # Audit trail creation, logging, persistence
     audit_verify.py      # 6-check entry + 11-check trail verification
+    integrations/
+      langchain.py       # AgentCertCallbackHandler + AgentCertMiddleware
     types.py             # KeyPair, Certificate, AuditEntry, ActionType, etc.
     exceptions.py        # Custom exception hierarchy
     cli.py               # Click-based CLI (12 commands)
-  tests/                 # 191 tests
-  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py
+  tests/                 # 258 tests
+  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py
   papers/                # Whitepaper, technical spec, condensed overview
 ```
 
