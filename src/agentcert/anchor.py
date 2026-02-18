@@ -35,16 +35,12 @@ _TX_VERSION = 2
 _DEFAULT_FEE_SATS = 1000  # safe minimum for testnet
 _SEQUENCE = 0xFFFFFFFF
 
-_P2PKH_VERSIONS = {"mainnet": 0x00, "testnet": 0x6F}
-
 _BECH32_HRPS = {"mainnet": "bc", "testnet": "tb"}
 
 _API_BASES = {
     "mainnet": "https://blockstream.info/api",
     "testnet": "https://blockstream.info/testnet/api",
 }
-
-_BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 _BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 
@@ -115,28 +111,7 @@ def build_op_return_script(payload: bytes) -> bytes:
 
 
 def derive_bitcoin_address(keys: KeyPair, *, network: str = "testnet") -> str:
-    """Derive a P2PKH Bitcoin address from a key pair.
-
-    Args:
-        keys: The key pair (uses the compressed public key).
-        network: "testnet" or "mainnet".
-
-    Returns:
-        A Base58Check-encoded P2PKH address.
-
-    Raises:
-        AnchorError: If the network is invalid.
-    """
-    if network not in _P2PKH_VERSIONS:
-        raise AnchorError(f"Unknown network: {network!r} (use 'testnet' or 'mainnet')")
-
-    pubkey_bytes = bytes.fromhex(keys.public_key_hex)
-    h160 = _hash160(pubkey_bytes)
-    return _base58check_encode(_P2PKH_VERSIONS[network], h160)
-
-
-def derive_segwit_address(keys: KeyPair, *, network: str = "testnet") -> str:
-    """Derive a native SegWit (P2WPKH / bech32) address from a key pair.
+    """Derive a native SegWit (P2WPKH / bech32) Bitcoin address from a key pair.
 
     Args:
         keys: The key pair (uses the compressed public key).
@@ -170,29 +145,6 @@ def _hash160(data: bytes) -> bytes:
     except TypeError:
         ripemd = hashlib.new("ripemd160", sha)
     return ripemd.digest()
-
-
-def _base58check_encode(version: int, payload: bytes) -> str:
-    """Base58Check encode with a version byte."""
-    data = bytes([version]) + payload
-    checksum = hashlib.sha256(hashlib.sha256(data).digest()).digest()[:4]
-    full = data + checksum
-
-    # Convert to integer and encode in base58
-    n = int.from_bytes(full, "big")
-    result: list[str] = []
-    while n > 0:
-        n, r = divmod(n, 58)
-        result.append(_BASE58_ALPHABET[r])
-
-    # Preserve leading zero bytes as '1's
-    for byte in full:
-        if byte == 0:
-            result.append(_BASE58_ALPHABET[0])
-        else:
-            break
-
-    return "".join(reversed(result))
 
 
 def _bech32_polymod(values: list[int]) -> int:
@@ -272,109 +224,6 @@ def _varint(n: int) -> bytes:
         return b"\xff" + struct.pack("<Q", n)
 
 
-def _push_data(data: bytes) -> bytes:
-    """Create a script push-data operation for the given bytes."""
-    length = len(data)
-    if length < 0x4C:
-        return bytes([length]) + data
-    elif length <= 0xFF:
-        return b"\x4c" + bytes([length]) + data
-    elif length <= 0xFFFF:
-        return b"\x4d" + struct.pack("<H", length) + data
-    else:
-        return b"\x4e" + struct.pack("<I", length) + data
-
-
-def _p2pkh_script(pubkey_hash: bytes) -> bytes:
-    """Build a P2PKH scriptPubKey: OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG."""
-    return b"\x76\xa9\x14" + pubkey_hash + b"\x88\xac"
-
-
-def _build_raw_tx(
-    utxo_txid_hex: str,
-    utxo_vout: int,
-    input_script: bytes,
-    op_return_script: bytes,
-    change_script: bytes,
-    change_value_sats: int,
-    *,
-    append_sighash: bool = False,
-) -> bytes:
-    """Build a raw Bitcoin transaction with an OP_RETURN and change output.
-
-    Args:
-        utxo_txid_hex: The UTXO txid as a hex string (natural byte order).
-        utxo_vout: The UTXO output index.
-        input_script: The scriptSig (or scriptPubKey for signing).
-        op_return_script: The complete OP_RETURN script.
-        change_script: The P2PKH change output script.
-        change_value_sats: The change amount in satoshis.
-        append_sighash: If True, append SIGHASH_ALL for signing.
-
-    Returns:
-        The raw transaction bytes.
-    """
-    tx = b""
-
-    # Version
-    tx += struct.pack("<I", _TX_VERSION)
-
-    # Inputs
-    tx += _varint(1)
-    tx += bytes.fromhex(utxo_txid_hex)[::-1]  # txid reversed
-    tx += struct.pack("<I", utxo_vout)
-    tx += _varint(len(input_script))
-    tx += input_script
-    tx += struct.pack("<I", _SEQUENCE)
-
-    # Outputs
-    tx += _varint(2)
-
-    # Output 0: OP_RETURN (0 sats)
-    tx += struct.pack("<Q", 0)
-    tx += _varint(len(op_return_script))
-    tx += op_return_script
-
-    # Output 1: Change
-    tx += struct.pack("<Q", change_value_sats)
-    tx += _varint(len(change_script))
-    tx += change_script
-
-    # Locktime
-    tx += struct.pack("<I", 0)
-
-    if append_sighash:
-        tx += struct.pack("<I", _SIGHASH_ALL)
-
-    return tx
-
-
-def _sign_p2pkh_input(
-    private_key: ec.EllipticCurvePrivateKey,
-    public_key_hex: str,
-    tx_for_signing: bytes,
-) -> bytes:
-    """Sign a P2PKH input and return the scriptSig.
-
-    Args:
-        private_key: The private key to sign with.
-        public_key_hex: The compressed public key hex.
-        tx_for_signing: The serialized transaction with sighash appended.
-
-    Returns:
-        The scriptSig bytes (<sig+hashtype> <pubkey>).
-    """
-    # Double SHA-256
-    sighash = hashlib.sha256(hashlib.sha256(tx_for_signing).digest()).digest()
-
-    # ECDSA sign over the pre-hashed value
-    sig_der = private_key.sign(sighash, ec.ECDSA(Prehashed(hashes.SHA256())))
-    sig_with_hashtype = sig_der + bytes([_SIGHASH_ALL])
-
-    pubkey_bytes = bytes.fromhex(public_key_hex)
-    return _push_data(sig_with_hashtype) + _push_data(pubkey_bytes)
-
-
 def _build_segwit_tx(
     utxo_txid_hex: str,
     utxo_vout: int,
@@ -417,8 +266,8 @@ def _build_segwit_tx(
     outputs += change_script
     hash_outputs = hashlib.sha256(hashlib.sha256(outputs).digest()).digest()
 
-    # scriptCode for P2WPKH = OP_DUP OP_HASH160 <20> <hash> OP_EQUALVERIFY OP_CHECKSIG
-    script_code = _p2pkh_script(pubkey_hash)
+    # BIP-143 scriptCode for P2WPKH = OP_DUP OP_HASH160 <20> <hash> OP_EQUALVERIFY OP_CHECKSIG
+    script_code = b"\x76\xa9\x14" + pubkey_hash + b"\x88\xac"
 
     # BIP-143 preimage
     preimage = b""
@@ -555,27 +404,16 @@ def anchor(
     payload = build_op_return_payload(cert)
     or_script = build_op_return_script(payload)
 
-    # Derive SegWit address and try it first, fall back to legacy P2PKH
+    # Derive SegWit address and fetch UTXOs
     pubkey_bytes = bytes.fromhex(creator_keys.public_key_hex)
     pubkey_hash = _hash160(pubkey_bytes)
+    address = derive_bitcoin_address(creator_keys, network=network)
 
-    segwit_addr = derive_segwit_address(creator_keys, network=network)
-    legacy_addr = derive_bitcoin_address(creator_keys, network=network)
-
-    utxos = _fetch_utxos(segwit_addr, network)
-    use_segwit = True
-
-    if not utxos:
-        utxos = _fetch_utxos(legacy_addr, network)
-        use_segwit = False
-
-    address = segwit_addr if use_segwit else legacy_addr
-
+    utxos = _fetch_utxos(address, network)
     if not utxos:
         raise AnchorError(
-            f"No UTXOs found on {network}. Fund one of these addresses first:\n"
-            f"  SegWit:  {segwit_addr}\n"
-            f"  Legacy:  {legacy_addr}"
+            f"No UTXOs found for {address} on {network}. "
+            f"Fund this address first."
         )
 
     # Select a UTXO with enough value
@@ -596,47 +434,16 @@ def anchor(
     utxo_value = utxo["value"]
     change_value = utxo_value - fee_sats
 
-    if use_segwit:
-        signed_tx = _build_segwit_tx(
-            utxo_txid_hex=utxo_txid,
-            utxo_vout=utxo_vout,
-            utxo_value_sats=utxo_value,
-            private_key=creator_keys.private_key,
-            public_key_hex=creator_keys.public_key_hex,
-            pubkey_hash=pubkey_hash,
-            op_return_script=or_script,
-            change_value_sats=change_value,
-        )
-    else:
-        # Legacy P2PKH path
-        utxo_script_pubkey = _p2pkh_script(pubkey_hash)
-        change_script = _p2pkh_script(pubkey_hash)
-
-        tx_for_signing = _build_raw_tx(
-            utxo_txid_hex=utxo_txid,
-            utxo_vout=utxo_vout,
-            input_script=utxo_script_pubkey,
-            op_return_script=or_script,
-            change_script=change_script,
-            change_value_sats=change_value,
-            append_sighash=True,
-        )
-
-        script_sig = _sign_p2pkh_input(
-            creator_keys.private_key,
-            creator_keys.public_key_hex,
-            tx_for_signing,
-        )
-
-        signed_tx = _build_raw_tx(
-            utxo_txid_hex=utxo_txid,
-            utxo_vout=utxo_vout,
-            input_script=script_sig,
-            op_return_script=or_script,
-            change_script=change_script,
-            change_value_sats=change_value,
-            append_sighash=False,
-        )
+    signed_tx = _build_segwit_tx(
+        utxo_txid_hex=utxo_txid,
+        utxo_vout=utxo_vout,
+        utxo_value_sats=utxo_value,
+        private_key=creator_keys.private_key,
+        public_key_hex=creator_keys.public_key_hex,
+        pubkey_hash=pubkey_hash,
+        op_return_script=or_script,
+        change_value_sats=change_value,
+    )
 
     # Broadcast
     txid = _broadcast_tx(signed_tx.hex(), network)

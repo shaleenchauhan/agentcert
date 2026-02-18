@@ -51,7 +51,6 @@ from agentcert.anchor import (
     build_op_return_payload,
     compute_anchor_hash,
     derive_bitcoin_address,
-    derive_segwit_address,
     load_receipt,
     save_receipt,
 )
@@ -105,7 +104,6 @@ __all__ = [
     "compute_anchor_hash",
     "build_op_return_payload",
     "derive_bitcoin_address",
-    "derive_segwit_address",
     "save_receipt",
     "load_receipt",
     # Verification

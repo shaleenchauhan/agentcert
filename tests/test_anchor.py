@@ -13,15 +13,13 @@ from agentcert.anchor import (
     build_op_return_payload,
     build_op_return_script,
     derive_bitcoin_address,
-    derive_segwit_address,
     anchor,
     save_receipt,
     load_receipt,
     _hash160,
-    _base58check_encode,
     _varint,
-    _build_raw_tx,
-    _p2pkh_script,
+    _p2wpkh_script,
+    _build_segwit_tx,
 )
 from agentcert.types import AnchorReceipt, CertType
 from agentcert.exceptions import AnchorError
@@ -124,11 +122,11 @@ class TestBuildOpReturnScript:
 class TestDeriveBitcoinAddress:
     def test_testnet_prefix(self, creator):
         addr = derive_bitcoin_address(creator, network="testnet")
-        assert addr[0] in ("m", "n")
+        assert addr.startswith("tb1")
 
     def test_mainnet_prefix(self, creator):
         addr = derive_bitcoin_address(creator, network="mainnet")
-        assert addr[0] == "1"
+        assert addr.startswith("bc1")
 
     def test_deterministic(self, creator):
         a1 = derive_bitcoin_address(creator, network="testnet")
@@ -144,6 +142,11 @@ class TestDeriveBitcoinAddress:
         with pytest.raises(AnchorError, match="Unknown network"):
             derive_bitcoin_address(creator, network="regtest")
 
+    def test_address_length(self, creator):
+        addr = derive_bitcoin_address(creator, network="testnet")
+        # bech32 P2WPKH testnet addresses are 42-62 chars
+        assert 42 <= len(addr) <= 62
+
 
 class TestBitcoinHelpers:
     def test_hash160_length(self):
@@ -158,46 +161,49 @@ class TestBitcoinHelpers:
         assert _varint(253) == b"\xfd\xfd\x00"
         assert _varint(65535) == b"\xfd\xff\xff"
 
-    def test_p2pkh_script_length(self):
-        script = _p2pkh_script(b"\x00" * 20)
-        assert len(script) == 25
-        assert script[0] == 0x76  # OP_DUP
-        assert script[1] == 0xA9  # OP_HASH160
-        assert script[2] == 0x14  # push 20 bytes
-        assert script[-2] == 0x88  # OP_EQUALVERIFY
-        assert script[-1] == 0xAC  # OP_CHECKSIG
+    def test_p2wpkh_script(self):
+        script = _p2wpkh_script(b"\x00" * 20)
+        assert len(script) == 22
+        assert script[0] == 0x00  # OP_0
+        assert script[1] == 0x14  # push 20 bytes
+        assert script[2:] == b"\x00" * 20
 
 
-class TestTransactionBuilding:
-    def test_tx_version(self, creator, cert):
+class TestSegWitTransactionBuilding:
+    def test_tx_segwit_marker(self, creator, cert):
         payload = build_op_return_payload(cert)
         or_script = build_op_return_script(payload)
         pubkey_hash = _hash160(bytes.fromhex(creator.public_key_hex))
-        change_script = _p2pkh_script(pubkey_hash)
 
-        tx = _build_raw_tx(
+        tx = _build_segwit_tx(
             utxo_txid_hex="aa" * 32,
             utxo_vout=0,
-            input_script=_p2pkh_script(pubkey_hash),
+            utxo_value_sats=50000,
+            private_key=creator.private_key,
+            public_key_hex=creator.public_key_hex,
+            pubkey_hash=pubkey_hash,
             op_return_script=or_script,
-            change_script=change_script,
-            change_value_sats=9000,
+            change_value_sats=49000,
         )
-        assert tx[:4] == b"\x02\x00\x00\x00"  # version 2
+        # Version 2
+        assert tx[:4] == b"\x02\x00\x00\x00"
+        # SegWit marker + flag
+        assert tx[4:6] == b"\x00\x01"
 
     def test_tx_locktime(self, creator, cert):
         payload = build_op_return_payload(cert)
         or_script = build_op_return_script(payload)
         pubkey_hash = _hash160(bytes.fromhex(creator.public_key_hex))
-        change_script = _p2pkh_script(pubkey_hash)
 
-        tx = _build_raw_tx(
+        tx = _build_segwit_tx(
             utxo_txid_hex="aa" * 32,
             utxo_vout=0,
-            input_script=b"",
+            utxo_value_sats=50000,
+            private_key=creator.private_key,
+            public_key_hex=creator.public_key_hex,
+            pubkey_hash=pubkey_hash,
             op_return_script=or_script,
-            change_script=change_script,
-            change_value_sats=9000,
+            change_value_sats=49000,
         )
         assert tx[-4:] == b"\x00\x00\x00\x00"  # locktime 0
 
@@ -229,45 +235,38 @@ class TestReceiptSaveLoad:
 
 
 class TestAnchorIntegration:
-    def _mock_both_addresses(self, creator, json_response, status=200):
-        """Register mocks for both segwit and legacy address UTXO lookups."""
-        segwit = derive_segwit_address(creator, network="testnet")
-        legacy = derive_bitcoin_address(creator, network="testnet")
-        responses.add(
-            responses.GET,
-            f"https://blockstream.info/testnet/api/address/{segwit}/utxo",
-            json=json_response,
-            status=status,
-        )
-        responses.add(
-            responses.GET,
-            f"https://blockstream.info/testnet/api/address/{legacy}/utxo",
-            json=json_response,
-            status=status,
-        )
-
     @responses.activate
     def test_anchor_no_utxos(self, creator, cert):
-        self._mock_both_addresses(creator, [])
+        address = derive_bitcoin_address(creator, network="testnet")
+        responses.add(
+            responses.GET,
+            f"https://blockstream.info/testnet/api/address/{address}/utxo",
+            json=[],
+            status=200,
+        )
         with pytest.raises(AnchorError, match="No UTXOs"):
             anchor(cert, creator_keys=creator, network="testnet")
 
     @responses.activate
     def test_anchor_insufficient_balance(self, creator, cert):
-        self._mock_both_addresses(
-            creator, [{"txid": "aa" * 32, "vout": 0, "value": 100, "status": {"confirmed": True}}],
+        address = derive_bitcoin_address(creator, network="testnet")
+        responses.add(
+            responses.GET,
+            f"https://blockstream.info/testnet/api/address/{address}/utxo",
+            json=[{"txid": "aa" * 32, "vout": 0, "value": 100, "status": {"confirmed": True}}],
+            status=200,
         )
         with pytest.raises(AnchorError, match="sufficient balance"):
             anchor(cert, creator_keys=creator, network="testnet")
 
     @responses.activate
     def test_anchor_success(self, creator, cert):
-        segwit = derive_segwit_address(creator, network="testnet")
+        address = derive_bitcoin_address(creator, network="testnet")
         fake_txid = "bb" * 32
 
         responses.add(
             responses.GET,
-            f"https://blockstream.info/testnet/api/address/{segwit}/utxo",
+            f"https://blockstream.info/testnet/api/address/{address}/utxo",
             json=[{"txid": "aa" * 32, "vout": 0, "value": 50000, "status": {"confirmed": True}}],
             status=200,
         )
@@ -286,10 +285,10 @@ class TestAnchorIntegration:
 
     @responses.activate
     def test_anchor_api_failure(self, creator, cert):
-        segwit = derive_segwit_address(creator, network="testnet")
+        address = derive_bitcoin_address(creator, network="testnet")
         responses.add(
             responses.GET,
-            f"https://blockstream.info/testnet/api/address/{segwit}/utxo",
+            f"https://blockstream.info/testnet/api/address/{address}/utxo",
             body="Server Error",
             status=500,
         )
