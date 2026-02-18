@@ -6,7 +6,9 @@ Provides two levels of integration:
   automatically creates signed audit entries for LLM calls, tool invocations,
   and agent decisions.
 - :class:`AgentCertMiddleware` — A high-level wrapper that creates a certificate
-  and audit trail, then injects the callback handler into an ``AgentExecutor``.
+  and audit trail, and provides a callback handler to pass via
+  ``config={"callbacks": [handler]}`` to any LangChain runnable (LangGraph
+  agents, chains, or legacy ``AgentExecutor``).
 
 Install with::
 
@@ -468,10 +470,11 @@ def _resolve_keys(keys: str | KeyPair) -> KeyPair:
 class AgentCertMiddleware:
     """High-level LangChain integration that provides identity + audit in a few lines.
 
-    Creates a certificate and audit trail on init, provides ``wrap()`` to inject
-    the callback handler into an ``AgentExecutor`` (or any object with a
-    ``callbacks`` attribute), and exposes accessors for the trail, certificate,
-    entries, and verification.
+    Creates a certificate and audit trail on init, and provides a callback
+    handler via :meth:`get_handler` that you pass to any LangChain runnable
+    through ``config={"callbacks": [handler]}``. This works with LangGraph
+    agents, chains, and legacy ``AgentExecutor``. For ``AgentExecutor``
+    specifically, :meth:`wrap` can inject the callback automatically.
 
     Args:
         creator_keys: Path to a keys JSON file, or a :class:`KeyPair`.
@@ -496,8 +499,11 @@ class AgentCertMiddleware:
             agent_name="my-agent",
             capabilities=["search", "summarize"],
         )
-        executor = middleware.wrap(executor)
-        result = executor.invoke({"input": "..."})
+        handler = middleware.get_handler()
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": "..."}]},
+            config={"callbacks": [handler]},
+        )
         print(middleware.verify().status)  # "VALID"
     """
 
@@ -540,14 +546,15 @@ class AgentCertMiddleware:
         )
 
     def wrap(self, executor: Any) -> Any:
-        """Inject the AgentCert callback handler into an executor.
+        """Convenience method to inject the callback into a legacy ``AgentExecutor``.
 
-        Works with any object that has a ``callbacks`` attribute (e.g.
-        ``AgentExecutor``). Mutates the executor in place and also returns
-        it for chaining.
+        Mutates the executor's ``callbacks`` list in place and returns it for
+        chaining. For LangGraph agents and other runnables, use
+        ``config={"callbacks": [middleware.get_handler()]}`` at invoke time
+        instead — that pattern works universally.
 
         Args:
-            executor: A LangChain executor or chain with a ``callbacks`` attribute.
+            executor: An ``AgentExecutor`` or any object with a ``callbacks`` attribute.
 
         Returns:
             The same executor, with the AgentCert handler added.

@@ -165,7 +165,7 @@ class TestPublicAPICompleteness:
             assert issubclass(cls, agentcert.AgentCertError)
 
     def test_version(self):
-        assert agentcert.__version__ == "0.1.0"
+        assert agentcert.__version__ == "0.2.0"
 
 
 class TestCLI:
@@ -191,7 +191,7 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert "0.2.0" in result.output
 
     def test_keygen_create_verify(self, tmp_path):
         from click.testing import CliRunner

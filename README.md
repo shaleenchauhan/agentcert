@@ -266,7 +266,7 @@ Trail verification runs 11 checks: non-empty trail, trail_id/cert_id/agent consi
 
 ### LangChain Integration
 
-Add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as signed audit entries.
+Add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as signed audit entries. Works with both LangGraph agents and legacy `AgentExecutor`.
 
 ```python
 from agentcert.integrations.langchain import AgentCertMiddleware
@@ -281,9 +281,12 @@ middleware = AgentCertMiddleware(
     risk_tier=3,
 )
 
-# Wrap your executor — all actions are logged automatically
-executor = middleware.wrap(executor)
-result = executor.invoke({"input": "Find the cheapest supplier"})
+# Pass the handler via config — works with any LangChain runnable
+handler = middleware.get_handler()
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Find the cheapest supplier"}]},
+    config={"callbacks": [handler]},
+)
 
 # Verify the audit trail (11 checks)
 verification = middleware.verify()
@@ -303,13 +306,11 @@ middleware.save("./agent-audit/")
 loaded = AgentCertMiddleware.load("./agent-audit/", agent_keys="agent.keys.json")
 ```
 
-For more control, use the callback handler directly:
+For legacy `AgentExecutor` objects, you can also use `wrap()` to inject the callback automatically:
 
 ```python
-from agentcert.integrations.langchain import AgentCertCallbackHandler
-
-handler = AgentCertCallbackHandler(trail, agent_keys)
-result = executor.invoke({"input": "..."}, config={"callbacks": [handler]})
+executor = middleware.wrap(executor)
+result = executor.invoke({"input": "..."})
 ```
 
 **Privacy:** LLM prompts, responses, and tool outputs are stored as SHA-256 hashes only — the trail proves what happened without exposing raw data.
