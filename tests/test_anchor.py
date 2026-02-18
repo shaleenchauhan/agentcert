@@ -13,6 +13,7 @@ from agentcert.anchor import (
     build_op_return_payload,
     build_op_return_script,
     derive_bitcoin_address,
+    derive_segwit_address,
     anchor,
     save_receipt,
     load_receipt,
@@ -228,38 +229,45 @@ class TestReceiptSaveLoad:
 
 
 class TestAnchorIntegration:
-    @responses.activate
-    def test_anchor_no_utxos(self, creator, cert):
-        address = derive_bitcoin_address(creator, network="testnet")
+    def _mock_both_addresses(self, creator, json_response, status=200):
+        """Register mocks for both segwit and legacy address UTXO lookups."""
+        segwit = derive_segwit_address(creator, network="testnet")
+        legacy = derive_bitcoin_address(creator, network="testnet")
         responses.add(
             responses.GET,
-            f"https://blockstream.info/testnet/api/address/{address}/utxo",
-            json=[],
-            status=200,
+            f"https://blockstream.info/testnet/api/address/{segwit}/utxo",
+            json=json_response,
+            status=status,
         )
+        responses.add(
+            responses.GET,
+            f"https://blockstream.info/testnet/api/address/{legacy}/utxo",
+            json=json_response,
+            status=status,
+        )
+
+    @responses.activate
+    def test_anchor_no_utxos(self, creator, cert):
+        self._mock_both_addresses(creator, [])
         with pytest.raises(AnchorError, match="No UTXOs"):
             anchor(cert, creator_keys=creator, network="testnet")
 
     @responses.activate
     def test_anchor_insufficient_balance(self, creator, cert):
-        address = derive_bitcoin_address(creator, network="testnet")
-        responses.add(
-            responses.GET,
-            f"https://blockstream.info/testnet/api/address/{address}/utxo",
-            json=[{"txid": "aa" * 32, "vout": 0, "value": 100, "status": {"confirmed": True}}],
-            status=200,
+        self._mock_both_addresses(
+            creator, [{"txid": "aa" * 32, "vout": 0, "value": 100, "status": {"confirmed": True}}],
         )
         with pytest.raises(AnchorError, match="sufficient balance"):
             anchor(cert, creator_keys=creator, network="testnet")
 
     @responses.activate
     def test_anchor_success(self, creator, cert):
-        address = derive_bitcoin_address(creator, network="testnet")
+        segwit = derive_segwit_address(creator, network="testnet")
         fake_txid = "bb" * 32
 
         responses.add(
             responses.GET,
-            f"https://blockstream.info/testnet/api/address/{address}/utxo",
+            f"https://blockstream.info/testnet/api/address/{segwit}/utxo",
             json=[{"txid": "aa" * 32, "vout": 0, "value": 50000, "status": {"confirmed": True}}],
             status=200,
         )
@@ -278,10 +286,10 @@ class TestAnchorIntegration:
 
     @responses.activate
     def test_anchor_api_failure(self, creator, cert):
-        address = derive_bitcoin_address(creator, network="testnet")
+        segwit = derive_segwit_address(creator, network="testnet")
         responses.add(
             responses.GET,
-            f"https://blockstream.info/testnet/api/address/{address}/utxo",
+            f"https://blockstream.info/testnet/api/address/{segwit}/utxo",
             body="Server Error",
             status=500,
         )
