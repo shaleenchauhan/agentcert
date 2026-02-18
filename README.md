@@ -24,10 +24,12 @@ pip install -e ".[dev]"
 
 Requires Python 3.11+. Dependencies: `cryptography`, `requests`, `click`.
 
-For LangChain integration:
+Optional extras:
 
 ```bash
-pip install agentcert[langchain]
+pip install agentcert[langchain]   # LangChain integration
+pip install agentcert[service]     # Anchoring service (FastAPI + uvicorn)
+pip install agentcert[client]      # SDK client (httpx)
 ```
 
 ## Quickstart
@@ -319,6 +321,68 @@ agentcert batch inspect batch.json
 agentcert batch proof batch.json --entry-id <hash> -o proof.json
 ```
 
+### Anchoring Service
+
+Run a service that receives signed audit entries, batches them into Merkle trees, and anchors roots to Bitcoin. Developers send signed entries to the API instead of managing Bitcoin transactions themselves.
+
+**Trust model:** Private keys stay on the developer's machine. Entries are signed before being sent. The service cannot forge entries.
+
+```bash
+# Start the service
+agentcert service start --port 8932 --network testnet
+
+# Admin commands
+agentcert service health
+agentcert service stats
+agentcert service force-batch
+```
+
+SDK client:
+
+```python
+from agentcert.client import AgentCertClient
+
+with AgentCertClient("http://localhost:8932") as client:
+    # Register certificate
+    client.register_certificate(cert)
+
+    # Submit signed entries
+    result = client.submit_trail(trail)
+    print(f"Accepted: {result['accepted']}")
+
+    # Force a batch cycle
+    batch = client.force_batch()
+
+    # Get Merkle proof for an entry
+    proof = client.get_proof(entry_id)
+    if proof:
+        print(f"Siblings: {len(proof.siblings)}")
+
+    # Full verification via service
+    verification = client.verify_entry(entry_id)
+    print(f"Status: {verification['status']}")
+
+    # Health check
+    health = client.health()
+```
+
+API endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/certificates` | Register a certificate |
+| GET | `/api/v1/certificates/{id}` | Get a certificate |
+| POST | `/api/v1/entries` | Submit signed entries |
+| GET | `/api/v1/entries/{id}` | Get an entry |
+| GET | `/api/v1/trails/{id}` | Get trail entries |
+| GET | `/api/v1/proofs/{id}` | Get Merkle proof |
+| GET | `/api/v1/verify/{id}` | Full verification |
+| GET | `/api/v1/batches/{id}` | Get batch details |
+| GET | `/api/v1/batches/latest` | Latest batch |
+| POST | `/api/v1/admin/force-batch` | Force batch cycle |
+| GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/stats` | Statistics |
+
 ### LangChain Integration
 
 Add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as signed audit entries. Works with both LangGraph agents and legacy `AgentExecutor`.
@@ -448,7 +512,7 @@ For the full protocol design, threat model, and technical specification, see the
 git clone https://github.com/shaleenchauhan/agentcert.git
 cd agentcert
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,langchain]"
+pip install -e ".[dev,langchain,service,client]"
 
 # Run tests
 pytest
@@ -462,6 +526,7 @@ python examples/full_lifecycle.py
 python examples/audit_trail_demo.py
 python examples/langchain_demo.py
 python examples/batch_anchor_demo.py
+python examples/service_demo.py
 ```
 
 ## Project Structure
@@ -469,7 +534,7 @@ python examples/batch_anchor_demo.py
 ```
 agentcert/
   src/agentcert/
-    __init__.py          # Public API (69 exports, no submodule imports needed)
+    __init__.py          # Public API (72 exports, no submodule imports needed)
     keys.py              # Key generation, save, load (secp256k1)
     certificate.py       # Certificate creation, signing, serialization
     chain.py             # Update, revoke, chain verification
@@ -479,13 +544,19 @@ agentcert/
     audit_verify.py      # 6-check entry + 11-check trail verification
     merkle.py            # Binary Merkle tree construction + proof generation
     batch.py             # Batch creation, anchoring, proof verification
+    client.py            # SDK client for the anchoring service (httpx)
+    service/
+      app.py             # FastAPI application (12 endpoints)
+      models.py          # SQLite database layer
+      scheduler.py       # Background batching + anchoring scheduler
+      config.py          # ServiceConfig dataclass
     integrations/
       langchain.py       # AgentCertCallbackHandler + AgentCertMiddleware
     types.py             # KeyPair, Certificate, AuditEntry, Batch, MerkleProof, etc.
     exceptions.py        # Custom exception hierarchy
-    cli.py               # Click-based CLI (17 commands)
-  tests/                 # 337 tests
-  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py, batch_anchor_demo.py
+    cli.py               # Click-based CLI (21 commands)
+  tests/                 # 396 tests
+  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py, batch_anchor_demo.py, service_demo.py
   papers/                # Whitepaper, technical spec, condensed overview
 ```
 

@@ -33,10 +33,21 @@ dependencies = [
 langchain = [
     "langchain-core>=0.1.0",
 ]
+service = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+]
+client = [
+    "httpx>=0.24.0",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "responses>=0.24",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "httpx>=0.24.0",
+    "langchain-core>=0.1.0",
 ]
 
 [project.scripts]

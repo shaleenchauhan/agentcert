@@ -1,196 +1,199 @@
-# AgentCert — Merkle Batching Session Summary
+# AgentCert — Phase 3b: Anchoring Service + SDK Client Session Summary
 
 ## Overview
 
-Added Merkle tree batching and batch anchoring to AgentCert (Phase 3a). Multiple audit entries can now be batched into a Merkle tree, with the root anchored to Bitcoin in a single transaction. Any individual entry is independently provable against the on-chain root via its O(log n) Merkle proof.
+Added a FastAPI anchoring service and httpx-based SDK client to AgentCert. The service receives signed audit entries, batches them into Merkle trees, anchors roots to Bitcoin, and serves proofs. The SDK client provides a Python interface for developers to interact with the service instead of managing Bitcoin transactions themselves.
 
-Without batching: 1,000 entries = 1,000 Bitcoin transactions (~$5,000 in fees).
-With batching: 1,000 entries = 1 Bitcoin transaction (~$5 in fees).
+**Trust model:** Private keys stay on the developer's machine. Entries are signed before being sent. The service cannot forge entries. Even if compromised, all entries are independently verifiable.
 
 ## Build Steps
 
 | Step | Description | Status |
 |------|-------------|--------|
-| 1 | New types — `MerkleProof`, `Batch`, `BatchVerificationResult`, `BatchVerificationCheck` in types.py; `BatchError` in exceptions.py | Done |
-| 2 | Merkle tree — `MerkleTree` class with construction, root, proof generation, static proof verification | Done |
-| 3 | Batch operations — `create_batch`, `create_batch_from_entries`, `create_batch_from_trail`, `anchor_batch`, proof retrieval, verification, save/load | Done |
-| 4 | Tests — 79 new tests (258 → 337 total), all passing | Done |
-| 5 | CLI — `batch` subcommand group with create, anchor, proof, verify, inspect | Done |
-| 6 | Public API — updated `__init__.py` (51 → 69 exports) | Done |
-| 7 | Example — `examples/batch_anchor_demo.py` | Done |
-| 8 | README — Merkle batching section, updated project structure | Done |
+| 1 | Setup — `fastapi`, `uvicorn`, `httpx` as optional deps; `service/` package; `ServiceError`, `ClientError` exceptions | Done |
+| 2 | Database layer — SQLite via `sqlite3`, 4 tables, CRUD for certs/entries/batches/proofs | Done |
+| 3 | Service config — `ServiceConfig` dataclass, `from_env()`, `from_file()` | Done |
+| 4 | Background scheduler — `BatchScheduler` with batching loop using existing `create_batch` + anchor infrastructure | Done |
+| 5 | FastAPI app — 12 endpoints: certificates, entries, trails, proofs, verify, batches, admin, health, stats | Done |
+| 6 | SDK client — `AgentCertClient` class, 14 methods, httpx-based, context manager | Done |
+| 7 | Tests — 59 new tests (337 → 396 total), all passing | Done |
+| 8 | CLI — `service` subcommand group with start, health, stats, force-batch | Done |
+| 9 | Public API — updated `__init__.py` (69 → 72 exports), conditional client import | Done |
+| 10 | Example — `examples/service_demo.py` full flow demo | Done |
+| 11 | README — added anchoring service and SDK client sections, updated project structure | Done |
 
 ## Files Created
 
 | File | Description |
 |------|-------------|
-| `src/agentcert/merkle.py` | `MerkleTree` class — SHA-256 binary Merkle tree (~130 lines) |
-| `src/agentcert/batch.py` | Batch creation, anchoring, proof retrieval, verification, save/load (~370 lines) |
-| `tests/test_merkle.py` | 34 tests across 6 test classes |
-| `tests/test_batch.py` | 45 tests across 13 test classes |
-| `examples/batch_anchor_demo.py` | Full lifecycle demo: create → batch → proofs → verify → save/reload |
+| `src/agentcert/service/__init__.py` | Service package init |
+| `src/agentcert/service/app.py` | FastAPI application with 12 endpoints (~280 lines) |
+| `src/agentcert/service/models.py` | SQLite database layer with CRUD operations (~280 lines) |
+| `src/agentcert/service/scheduler.py` | Background batching + anchoring scheduler (~120 lines) |
+| `src/agentcert/service/config.py` | `ServiceConfig` dataclass (~100 lines) |
+| `src/agentcert/client.py` | `AgentCertClient` SDK client (~260 lines) |
+| `tests/test_service.py` | 40 tests across 9 test classes |
+| `tests/test_client.py` | 19 tests across 11 test classes |
+| `examples/service_demo.py` | Full flow demo: start service, register, submit, batch, proof, verify |
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| `src/agentcert/types.py` | Added `MerkleProof`, `Batch`, `BatchVerificationCheck`, `BatchVerificationResult` frozen dataclasses |
-| `src/agentcert/exceptions.py` | Added `BatchError(AgentCertError)` |
-| `src/agentcert/__init__.py` | 18 new exports (51 → 69): `MerkleTree`, batch functions, new types, `BatchError` |
-| `src/agentcert/cli.py` | Added `batch` subcommand group with 5 commands: create, anchor, proof, verify, inspect |
-| `README.md` | Added Merkle batching section with SDK + CLI examples, updated project structure (69 exports, 337 tests) |
+| `pyproject.toml` | Added `service`, `client` optional dependency groups; updated `dev` group |
+| `src/agentcert/exceptions.py` | Added `ServiceError`, `ClientError` |
+| `src/agentcert/__init__.py` | Added conditional `AgentCertClient` import, `ServiceError`, `ClientError` exports (69 → 72) |
+| `src/agentcert/cli.py` | Added `service` subcommand group with 4 commands: start, health, stats, force-batch |
+| `README.md` | Added anchoring service + SDK client sections, updated install options, project structure (396 tests, 21 CLI commands) |
 
 ## Architecture
 
-### MerkleTree (merkle.py)
+### Database (models.py)
 
-Standard binary SHA-256 Merkle tree:
+SQLite via `sqlite3` standard library. No ORM. 4 tables:
 
-- Leaves are 32-byte SHA-256 hashes passed in directly
-- Internal nodes: `SHA-256(left_child + right_child)`
-- Odd levels: last node is duplicated
-- All levels stored for O(1) proof generation
-- `get_proof(index)` returns a `MerkleProof` with sibling hashes and directions
-- `verify_proof(leaf, proof, root)` recomputes root from leaf+siblings, compares to expected
+- **certificates** — registered certificates (cert_id PK, certificate_json, registered_at)
+- **entries** — audit entries (entry_id PK, trail_id, cert_id, agent_id, sequence, entry_json, batch_id FK)
+- **batches** — Merkle batches (batch_id PK, merkle_root, item_count, item_hashes_json, anchor_receipt_json)
+- **proofs** — Merkle proofs (entry_id + batch_id composite PK, proof_json)
 
-### Batch Operations (batch.py)
+Indexes on trail_id, cert_id, batch_id for entries.
 
-**Batch creation:**
-- `create_batch(items)` — items can be hex strings, bytes, or dicts (dicts are serialized to canonical JSON and hashed)
-- `create_batch_from_entries(entries)` — uses each entry's `entry_id` as the leaf hash
-- `create_batch_from_trail(trail)` — batches all entries in a trail
+### Service (app.py)
 
-**Anchoring:**
-- `anchor_batch(batch, creator_keys=..., network=...)` — builds OP_RETURN payload with type `0x01` (MERKLE_ROOT), reuses the existing Bitcoin transaction infrastructure from `anchor.py`
-- Returns updated `Batch` with `anchor_receipt` set
+FastAPI application with 12 endpoints:
 
-**Proof retrieval:**
-- `get_proof_for_entry(entry, tree, batch)` — Merkle proof for an audit entry
-- `get_proof_for_item(item_hash, tree, batch)` — Merkle proof for any item hash
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/certificates` | POST | Register certificate (validates cert_id + creator signature) |
+| `/api/v1/certificates/{id}` | GET | Get certificate |
+| `/api/v1/entries` | POST | Submit entries (validates entry_id + agent signature + cert binding) |
+| `/api/v1/entries/{id}` | GET | Get entry |
+| `/api/v1/trails/{id}` | GET | Get trail entries |
+| `/api/v1/proofs/{id}` | GET | Get Merkle proof (or "pending" status) |
+| `/api/v1/verify/{id}` | GET | Full verification (5 checks: integrity, signature, cert binding, proof, anchor) |
+| `/api/v1/batches/{id}` | GET | Get batch |
+| `/api/v1/batches/latest` | GET | Latest batch |
+| `/api/v1/admin/force-batch` | POST | Force immediate batch cycle |
+| `/api/v1/health` | GET | Health check |
+| `/api/v1/stats` | GET | Statistics |
 
-**Verification:**
-- `verify_batch_proof(item_hash, proof, batch)` — 3 checks: Merkle proof validity, root match, anchor validity
-- `verify_entry_in_batch(entry, proof, batch, certificate=None)` — same + optional cert_id binding check
-- Returns `BatchVerificationResult` with status: `VALID`, `INVALID`, or `NOT_ANCHORED`
+Entry validation on submission:
+1. Parse entry dict to `AuditEntry`
+2. Verify `entry_id` integrity (SHA-256 of body)
+3. Verify agent signature (ECDSA)
+4. Check `cert_id` references a registered certificate
+5. Check `agent_id` matches the certificate
 
-**Persistence:**
-- `save_batch / load_batch` — batch metadata as JSON
-- `save_proofs / load_proofs` — dict of `item_hash → MerkleProof` as JSON
+### Scheduler (scheduler.py)
 
-### OP_RETURN Payload
+`BatchScheduler` runs as an asyncio background task:
+1. Queries unbatched entries
+2. If count >= `batch_min_entries`: builds Merkle tree, stores batch + proofs, marks entries batched
+3. If wallet key configured: anchors to Bitcoin
+4. Logs the result
 
-```
-[AIT\0]   protocol tag     (4 bytes)
-[0x01]    version           (1 byte)
-[0x01]    MERKLE_ROOT       (1 byte)  ← distinct from 0x02 IDENTITY_CERT
-[...]     Merkle root hash  (32 bytes)
-Total: 38 bytes
-```
+### Client (client.py)
+
+`AgentCertClient` — httpx-based sync client with 14 methods:
+
+- `register_certificate(cert)`, `get_certificate(cert_id)`
+- `submit_entries(entries)`, `submit_trail(trail)`, `get_entry(entry_id)`
+- `get_trail(trail_id)`
+- `get_proof(entry_id)` → `MerkleProof | None`, `get_proof_raw(entry_id)`
+- `verify_entry(entry_id)`
+- `get_batch(batch_id)`, `get_latest_batch()`, `force_batch()`
+- `health()`, `stats()`
+
+Context manager support (`with AgentCertClient(...) as client:`).
+
+### Config (config.py)
+
+`ServiceConfig` dataclass with defaults:
+- `db_path`: `"./agentcert-service/agentcert.db"`
+- `batch_interval_seconds`: 600 (10 minutes)
+- `batch_min_entries`: 1
+- `batch_max_entries`: 10000
+- `network`: `"testnet"`
+- `anchor_wallet_key`: None (skip anchoring)
+- `host`: `"0.0.0.0"`, `port`: 8932
+
+Loadable from environment variables (`AGENTCERT_*`) or JSON file.
 
 ## Test Count
 
 | | Before | After | Delta |
 |-|--------|-------|-------|
-| Tests | 258 | 337 | +79 |
+| Tests | 337 | 396 | +59 |
 
-### test_merkle.py (34 tests)
-
-| Test class | Count | Covers |
-|------------|-------|--------|
-| `TestMerkleTreeConstruction` | 12 | 1, 2, 3, 4, 7, 8, 16, 100, 1000 leaves; empty, invalid leaf errors |
-| `TestMerkleRoot` | 4 | root_hex, determinism, different leaves, order matters |
-| `TestHashPair` | 2 | Basic hash, non-commutativity |
-| `TestProofGeneration` | 6 | 1/2/4/100 leaf proofs, depth for powers of two, out-of-range error |
-| `TestProofVerification` | 8 | All 16 leaves, single leaf, odd leaves, 1000 leaves, tampered leaf/root/sibling/direction |
-| `TestMerkleProofSerialization` | 2 | Roundtrip, dict structure |
-
-### test_batch.py (45 tests)
+### test_service.py (40 tests)
 
 | Test class | Count | Covers |
 |------------|-------|--------|
-| `TestNormalizeItem` | 7 | hex, bytes, dict, invalid hex, wrong length, unsupported type |
-| `TestCreateBatch` | 7 | hex, bytes, dicts, mixed, single, empty, batch_id |
-| `TestCreateBatchFromEntries` | 2 | From entries, empty raises |
-| `TestCreateBatchFromTrail` | 2 | From trail, empty raises |
-| `TestProofRetrieval` | 4 | For entry, for item, missing entry, missing item |
-| `TestVerifyBatchProof` | 6 | Valid not-anchored, valid anchored, tampered item, mismatched anchor, all entries, checks structure |
-| `TestVerifyEntryInBatch` | 3 | Matching cert, wrong cert, no cert |
-| `TestBatchPayload` | 2 | Payload format, type is MERKLE_ROOT |
-| `TestAnchorBatch` | 2 | Mocked success, no UTXOs |
-| `TestBatchSaveLoad` | 4 | Roundtrip, with receipt, JSON valid, nonexistent |
-| `TestProofsSaveLoad` | 3 | Roundtrip, JSON valid, nonexistent |
-| `TestBatchSerialization` | 2 | Roundtrip, with receipt |
-| `TestBatchLifecycle` | 1 | Full lifecycle: create → batch → proofs → verify → save → reload → re-verify |
+| `TestHealth` | 2 | Health endpoint, empty stats |
+| `TestCertificates` | 7 | Register, duplicate (409), invalid cert_id, invalid sig, missing field, get, not found |
+| `TestEntries` | 8 | Submit, duplicate, invalid sig, unregistered cert, wrong agent, missing field, get, not found |
+| `TestTrails` | 2 | Get trail, not found |
+| `TestProofs` | 3 | Pending, after batch, not found |
+| `TestVerify` | 3 | Pending, after batch, not found |
+| `TestBatches` | 6 | Force batch (empty, with entries), get batch, not found, latest, latest empty |
+| `TestFullFlow` | 1 | Register → submit → batch → proof → verify (full integration) |
+| `TestConfig` | 3 | Default, from_env, from_file |
+| `TestDatabase` | 5 | Register+get cert, get not found, store+get entries, unbatched entries, stats |
 
-## API Exports (69 total, +18 new)
+### test_client.py (19 tests)
+
+| Test class | Count | Covers |
+|------------|-------|--------|
+| `TestRegisterCertificate` | 2 | Success, conflict (409) |
+| `TestSubmitEntries` | 2 | Submit entries, submit trail |
+| `TestGetProof` | 3 | Pending, available (returns MerkleProof), raw |
+| `TestVerifyEntry` | 1 | Full verification response |
+| `TestGetBatch` | 2 | Get batch, get latest |
+| `TestForceBatch` | 1 | Force batch |
+| `TestHealthAndStats` | 2 | Health, stats |
+| `TestErrorHandling` | 2 | 404 → ClientError, connection error → ClientError |
+| `TestContextManager` | 1 | With-statement |
+| `TestGetCertificate` | 1 | Get certificate |
+| `TestGetEntry` | 1 | Get entry |
+| `TestGetTrail` | 1 | Get trail |
+
+## API Exports (72 total, +3 new)
 
 ### New exports
 
-**Functions (12):**
-- `create_batch` — Batch from hex strings, bytes, or dicts
-- `create_batch_from_entries` — Batch from audit entries
-- `create_batch_from_trail` — Batch from an audit trail
-- `anchor_batch` — Anchor batch root to Bitcoin
-- `get_proof_for_entry` — Merkle proof for an audit entry
-- `get_proof_for_item` — Merkle proof for an item hash
-- `verify_batch_proof` — Verify item against a batch
-- `verify_entry_in_batch` — Verify entry against a batch + optional cert binding
-- `save_batch` / `load_batch` — Batch persistence
-- `save_proofs` / `load_proofs` — Proof persistence
-
 **Classes (1):**
-- `MerkleTree` — Binary SHA-256 Merkle tree
+- `AgentCertClient` — SDK client for the anchoring service (conditional on httpx)
 
-**Types (4):**
-- `MerkleProof` — Proof of inclusion (leaf_hash, siblings, directions, root)
-- `Batch` — Batch metadata (batch_id, merkle_root, item_hashes, anchor_receipt)
-- `BatchVerificationCheck` — Single batch verification check
-- `BatchVerificationResult` — Aggregate batch verification result
+**Exceptions (2):**
+- `ServiceError` — raised by the service on internal errors
+- `ClientError` — raised by the SDK client on communication errors
 
-**Exceptions (1):**
-- `BatchError` — Raised on Merkle/batch operation failures
-
-## CLI Commands (5 new, 17 total)
+## CLI Commands (4 new, 21 total)
 
 ```bash
-agentcert batch create trail.json -o batch.json
-agentcert batch anchor batch.json --creator-keys ck.json --network testnet
-agentcert batch proof batch.json --entry-id <hash> -o proof.json
-agentcert batch verify batch.json --entry-id <hash>
-agentcert batch inspect batch.json
+agentcert service start [--config config.json] [--port 8932] [--network testnet] [--wallet-key key.json]
+agentcert service health [--url http://localhost:8932]
+agentcert service stats [--url http://localhost:8932]
+agentcert service force-batch [--url http://localhost:8932]
 ```
 
-## Coverage
+## Dependencies
 
-```
-Name                                      Stmts   Miss  Cover
------------------------------------------------------------------------
-src/agentcert/__init__.py                    17      2    88%
-src/agentcert/anchor.py                     200     17    92%
-src/agentcert/audit.py                       83      4    95%
-src/agentcert/audit_verify.py               122      2    98%
-src/agentcert/batch.py                      148     12    92%
-src/agentcert/certificate.py                 46      6    87%
-src/agentcert/chain.py                       82      2    98%
-src/agentcert/cli.py                        368    139    62%
-src/agentcert/exceptions.py                  11      0   100%
-src/agentcert/integrations/__init__.py        0      0   100%
-src/agentcert/integrations/langchain.py     183      6    97%
-src/agentcert/keys.py                        37      2    95%
-src/agentcert/merkle.py                      64      0   100%
-src/agentcert/types.py                      204      1    99%
-src/agentcert/verify.py                      62      2    97%
------------------------------------------------------------------------
-TOTAL                                      1627    195    88%
-```
+| Package | Group | Purpose |
+|---------|-------|---------|
+| `fastapi>=0.100.0` | service | REST API framework |
+| `uvicorn>=0.20.0` | service | ASGI server |
+| `httpx>=0.24.0` | client | HTTP client for SDK |
 
-New modules: `merkle.py` at 100%, `batch.py` at 92%. Overall project coverage 88%.
+All optional — install with `pip install agentcert[service]` or `pip install agentcert[client]`.
 
 ## Open Items
 
-- **PyPI re-publish**: Package on PyPI is v0.2.0 and does not include Merkle batching. A version bump to v0.3.0 and re-publish is needed.
-- **Real Bitcoin anchor test**: The demo runs offline. A test anchoring a real batch to Bitcoin testnet would confirm end-to-end.
-- **Cross-agent batching**: The current API batches entries from a single trail. A future phase could batch entries from multiple agents/trails into a single tree.
-- **Incremental batching**: Currently the entire trail is batched at once. Support for appending new entries to an existing batch (re-batching) would be useful.
-- **Merkle root anchoring for audit trails**: The trail itself could store a reference to the batch that anchored it, closing the loop between trail verification and batch verification.
+- **PyPI re-publish**: Package on PyPI is v0.2.0. A version bump and re-publish is needed for the service/client additions.
+- **Authentication**: The service has no auth. A future phase could add API key or JWT authentication.
+- **Rate limiting**: No rate limiting on endpoints.
+- **Async database**: SQLite via sqlite3 is synchronous, wrapped in `asyncio.to_thread` for the scheduler. A future phase could use `aiosqlite`.
+- **PostgreSQL**: SQLite is fine for single-instance deployment. For production scale, a PostgreSQL adapter would be needed.
+- **Docker**: No Dockerfile yet. Would simplify deployment.
 - **GitHub Actions CI**: No CI pipeline yet.

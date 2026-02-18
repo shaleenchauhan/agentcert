@@ -638,3 +638,135 @@ def batch_inspect(batch_file: str) -> None:
         click.echo(f"  item hashes:")
         for i, h in enumerate(b.item_hashes):
             click.echo(f"    [{i}] {h}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Service subcommand group
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@cli.group()
+def service() -> None:
+    """Anchoring service commands (start, health, stats, force-batch)."""
+
+
+@service.command("start")
+@click.option("--config", "config_file", default=None, help="Path to JSON config file.")
+@click.option("--port", default=None, type=int, help="Server port (default: 8932).")
+@click.option("--host", default=None, help="Server host (default: 0.0.0.0).")
+@click.option("--network", default=None, type=click.Choice(["testnet", "mainnet"]),
+              help="Bitcoin network.")
+@click.option("--wallet-key", default=None, help="Path to wallet key file for anchoring.")
+@click.option("--db-path", default=None, help="Path to SQLite database file.")
+@_handle_error
+def service_start(
+    config_file: str | None,
+    port: int | None,
+    host: str | None,
+    network: str | None,
+    wallet_key: str | None,
+    db_path: str | None,
+) -> None:
+    """Start the AgentCert anchoring service."""
+    try:
+        import uvicorn
+    except ImportError:
+        click.secho(
+            "Error: uvicorn not installed. Install with: pip install agentcert[service]",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
+    from agentcert.service.config import ServiceConfig
+    from agentcert.service.app import create_app
+
+    if config_file:
+        cfg = ServiceConfig.from_file(config_file)
+    else:
+        cfg = ServiceConfig.from_env()
+
+    # Override with CLI flags
+    if port is not None:
+        cfg = ServiceConfig(**{**cfg.__dict__, "port": port})
+    if host is not None:
+        cfg = ServiceConfig(**{**cfg.__dict__, "host": host})
+    if network is not None:
+        cfg = ServiceConfig(**{**cfg.__dict__, "network": network})
+    if wallet_key is not None:
+        cfg = ServiceConfig(**{**cfg.__dict__, "anchor_wallet_key": wallet_key})
+    if db_path is not None:
+        cfg = ServiceConfig(**{**cfg.__dict__, "db_path": db_path})
+
+    click.echo(f"Starting AgentCert service on {cfg.host}:{cfg.port}")
+    click.echo(f"  Database: {cfg.db_path}")
+    click.echo(f"  Network:  {cfg.network}")
+    click.echo(f"  Batch interval: {cfg.batch_interval_seconds}s")
+
+    app = create_app(cfg)
+    uvicorn.run(app, host=cfg.host, port=cfg.port)
+
+
+_DEFAULT_SERVICE_URL = "http://localhost:8932"
+
+
+@service.command("health")
+@click.option("--url", default=_DEFAULT_SERVICE_URL, help="Service URL.")
+@_handle_error
+def service_health(url: str) -> None:
+    """Check service health."""
+    try:
+        import httpx
+    except ImportError:
+        click.secho(
+            "Error: httpx not installed. Install with: pip install agentcert[client]",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
+    resp = httpx.get(f"{url.rstrip('/')}/api/v1/health", timeout=10)
+    data = resp.json()
+    click.echo(json.dumps(data, indent=2))
+
+
+@service.command("stats")
+@click.option("--url", default=_DEFAULT_SERVICE_URL, help="Service URL.")
+@_handle_error
+def service_stats(url: str) -> None:
+    """Get service statistics."""
+    try:
+        import httpx
+    except ImportError:
+        click.secho(
+            "Error: httpx not installed. Install with: pip install agentcert[client]",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
+    resp = httpx.get(f"{url.rstrip('/')}/api/v1/stats", timeout=10)
+    data = resp.json()
+    click.echo(json.dumps(data, indent=2))
+
+
+@service.command("force-batch")
+@click.option("--url", default=_DEFAULT_SERVICE_URL, help="Service URL.")
+@_handle_error
+def service_force_batch(url: str) -> None:
+    """Force an immediate batch cycle on the running service."""
+    try:
+        import httpx
+    except ImportError:
+        click.secho(
+            "Error: httpx not installed. Install with: pip install agentcert[client]",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
+    resp = httpx.post(f"{url.rstrip('/')}/api/v1/admin/force-batch", timeout=30)
+    data = resp.json()
+
+    if data.get("status") == "batched":
+        click.echo(f"Batch created: {data['batch_id']}")
+        click.echo(f"  items:   {data['item_count']}")
+        click.echo(f"  anchored: {data['anchored']}")
+    else:
+        click.echo("No entries to batch.")

@@ -43,3 +43,11 @@ class AuditError(AgentCertError):
 
 class BatchError(AgentCertError):
     """Raised when Merkle batch operations fail."""
+
+
+class ServiceError(AgentCertError):
+    """Raised when the anchoring service encounters an internal error."""
+
+
+class ClientError(AgentCertError):
+    """Raised when the SDK client fails to communicate with the service."""

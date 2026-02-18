@@ -115,6 +115,13 @@ from agentcert.types import (
     VerificationResult,
 )
 
+# ── Client (optional — requires httpx) ───────────────────────────────────────
+
+try:
+    from agentcert.client import AgentCertClient
+except ImportError:
+    pass
+
 # ── Integrations (optional) ───────────────────────────────────────────────────
 
 try:
@@ -134,9 +141,11 @@ from agentcert.exceptions import (
     BatchError,
     CertificateError,
     ChainError,
+    ClientError,
     KeyGenerationError,
     KeyLoadError,
     SerializationError,
+    ServiceError,
     SignatureError,
     VerificationError,
 )
@@ -206,6 +215,8 @@ __all__ = [
     "Batch",
     "BatchVerificationCheck",
     "BatchVerificationResult",
+    # Client (available when httpx is installed)
+    "AgentCertClient",
     # Integrations (available when langchain is installed)
     "AgentCertCallbackHandler",
     "AgentCertMiddleware",
@@ -214,7 +225,9 @@ __all__ = [
     "KeyGenerationError",
     "KeyLoadError",
     "CertificateError",
+    "ClientError",
     "SignatureError",
+    "ServiceError",
     "AnchorError",
     "VerificationError",
     "ChainError",
