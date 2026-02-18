@@ -39,3 +39,7 @@ class SerializationError(AgentCertError):
 
 class AuditError(AgentCertError):
     """Raised when audit trail operations fail."""
+
+
+class BatchError(AgentCertError):
+    """Raised when Merkle batch operations fail."""

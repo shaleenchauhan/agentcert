@@ -264,6 +264,61 @@ Entry verification runs 6 checks: entry_id integrity, agent_id derivation, agent
 
 Trail verification runs 11 checks: non-empty trail, trail_id/cert_id/agent consistency, first-entry linkage, hash-chain integrity, sequence continuity, timestamp ordering, all entry IDs, all signatures, and certificate binding.
 
+### Merkle Batching
+
+Batch multiple audit entries into a Merkle tree and anchor the root in a single Bitcoin transaction. Any individual entry is then independently provable against the on-chain root via its O(log n) Merkle proof.
+
+Without batching: 1,000 entries = 1,000 Bitcoin transactions (~$5,000 in fees).
+With batching: 1,000 entries = 1 Bitcoin transaction (~$5 in fees).
+
+```python
+# Batch all trail entries into a Merkle tree
+batch, tree = agentcert.create_batch_from_trail(trail)
+print(f"Merkle root: {batch.merkle_root}")
+print(f"Items: {batch.item_count}")
+
+# Anchor the batch root to Bitcoin (1 transaction for all entries)
+batch = agentcert.anchor_batch(batch, creator_keys=creator_keys, network="testnet")
+print(f"Anchored: {batch.anchor_receipt.txid}")
+
+# Get proof for a specific entry
+entries = agentcert.get_trail_entries(trail)
+proof = agentcert.get_proof_for_entry(entries[3], tree, batch)
+print(f"Proof: {len(proof.siblings)} siblings")  # O(log n) hashes
+
+# Verify: is this entry anchored on Bitcoin?
+result = agentcert.verify_entry_in_batch(entries[3], proof, batch, certificate=cert)
+print(result.status)  # "VALID"
+
+# Save everything
+agentcert.save_batch(batch, "batch.json")
+agentcert.save_proofs(
+    {e.entry_id: agentcert.get_proof_for_entry(e, tree, batch) for e in entries},
+    "proofs.json",
+)
+
+# Later: verify from saved files
+batch = agentcert.load_batch("batch.json")
+proofs = agentcert.load_proofs("proofs.json")
+result = agentcert.verify_batch_proof(entries[3].entry_id, proofs[entries[3].entry_id], batch)
+```
+
+You can also batch arbitrary items (hex hashes, bytes, or dicts):
+
+```python
+batch, tree = agentcert.create_batch(["aabb...", {"key": "value"}, raw_bytes])
+```
+
+CLI:
+
+```bash
+agentcert batch create trail.json -o batch.json
+agentcert batch anchor batch.json --creator-keys ck.json --network testnet
+agentcert batch verify batch.json --entry-id <hash>
+agentcert batch inspect batch.json
+agentcert batch proof batch.json --entry-id <hash> -o proof.json
+```
+
 ### LangChain Integration
 
 Add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as signed audit entries. Works with both LangGraph agents and legacy `AgentExecutor`.
@@ -406,6 +461,7 @@ python examples/quickstart.py
 python examples/full_lifecycle.py
 python examples/audit_trail_demo.py
 python examples/langchain_demo.py
+python examples/batch_anchor_demo.py
 ```
 
 ## Project Structure
@@ -413,7 +469,7 @@ python examples/langchain_demo.py
 ```
 agentcert/
   src/agentcert/
-    __init__.py          # Public API (51 exports, no submodule imports needed)
+    __init__.py          # Public API (69 exports, no submodule imports needed)
     keys.py              # Key generation, save, load (secp256k1)
     certificate.py       # Certificate creation, signing, serialization
     chain.py             # Update, revoke, chain verification
@@ -421,13 +477,15 @@ agentcert/
     verify.py            # 6-check certificate verification
     audit.py             # Audit trail creation, logging, persistence
     audit_verify.py      # 6-check entry + 11-check trail verification
+    merkle.py            # Binary Merkle tree construction + proof generation
+    batch.py             # Batch creation, anchoring, proof verification
     integrations/
       langchain.py       # AgentCertCallbackHandler + AgentCertMiddleware
-    types.py             # KeyPair, Certificate, AuditEntry, ActionType, etc.
+    types.py             # KeyPair, Certificate, AuditEntry, Batch, MerkleProof, etc.
     exceptions.py        # Custom exception hierarchy
-    cli.py               # Click-based CLI (12 commands)
-  tests/                 # 258 tests
-  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py
+    cli.py               # Click-based CLI (17 commands)
+  tests/                 # 337 tests
+  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py, batch_anchor_demo.py
   papers/                # Whitepaper, technical spec, condensed overview
 ```
 

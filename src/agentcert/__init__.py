@@ -73,6 +73,25 @@ from agentcert.audit import (
 
 from agentcert.audit_verify import verify_audit_entry, verify_audit_trail
 
+# ── Merkle Batching ────────────────────────────────────────────────────────
+
+from agentcert.merkle import MerkleTree
+
+from agentcert.batch import (
+    anchor_batch,
+    create_batch,
+    create_batch_from_entries,
+    create_batch_from_trail,
+    get_proof_for_entry,
+    get_proof_for_item,
+    load_batch,
+    load_proofs,
+    save_batch,
+    save_proofs,
+    verify_batch_proof,
+    verify_entry_in_batch,
+)
+
 # ── Types ────────────────────────────────────────────────────────────────────
 
 from agentcert.types import (
@@ -84,10 +103,14 @@ from agentcert.types import (
     AuditTrailVerificationResult,
     AuditVerificationCheck,
     AuditVerificationResult,
+    Batch,
+    BatchVerificationCheck,
+    BatchVerificationResult,
     Certificate,
     CertType,
     ChainResult,
     KeyPair,
+    MerkleProof,
     VerificationCheck,
     VerificationResult,
 )
@@ -108,6 +131,7 @@ from agentcert.exceptions import (
     AgentCertError,
     AnchorError,
     AuditError,
+    BatchError,
     CertificateError,
     ChainError,
     KeyGenerationError,
@@ -149,6 +173,20 @@ __all__ = [
     "load_trail",
     "verify_audit_entry",
     "verify_audit_trail",
+    # Merkle Batching
+    "MerkleTree",
+    "create_batch",
+    "create_batch_from_entries",
+    "create_batch_from_trail",
+    "anchor_batch",
+    "get_proof_for_entry",
+    "get_proof_for_item",
+    "verify_batch_proof",
+    "verify_entry_in_batch",
+    "save_batch",
+    "load_batch",
+    "save_proofs",
+    "load_proofs",
     # Types
     "KeyPair",
     "Certificate",
@@ -164,6 +202,10 @@ __all__ = [
     "AuditVerificationCheck",
     "AuditVerificationResult",
     "AuditTrailVerificationResult",
+    "MerkleProof",
+    "Batch",
+    "BatchVerificationCheck",
+    "BatchVerificationResult",
     # Integrations (available when langchain is installed)
     "AgentCertCallbackHandler",
     "AgentCertMiddleware",
@@ -178,4 +220,5 @@ __all__ = [
     "ChainError",
     "SerializationError",
     "AuditError",
+    "BatchError",
 ]

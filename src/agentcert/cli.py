@@ -11,6 +11,16 @@ import click
 import agentcert
 from agentcert.audit import create_audit_trail, log_action, load_trail, save_trail, get_trail_info
 from agentcert.audit_verify import verify_audit_entry, verify_audit_trail
+from agentcert.batch import (
+    create_batch_from_trail,
+    anchor_batch as _anchor_batch,
+    get_proof_for_item,
+    load_batch,
+    load_proofs,
+    save_batch,
+    save_proofs,
+    verify_batch_proof,
+)
 from agentcert.exceptions import AgentCertError
 from agentcert.types import ActionType
 
@@ -476,3 +486,155 @@ def audit_inspect(trail_file: str, entries: bool) -> None:
             click.echo(f"       entry_id: {entry.entry_id}")
             if entry.action_detail:
                 click.echo(f"       detail:   {json.dumps(entry.action_detail)}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Batch subcommand group
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@cli.group()
+def batch() -> None:
+    """Merkle batch commands (create, anchor, proof, verify, inspect)."""
+
+
+# ── batch create ────────────────────────────────────────────────────────────
+
+
+@batch.command("create")
+@click.argument("trail_file")
+@click.option("--output", "-o", required=True, help="Output file path for the batch.")
+@_handle_error
+def batch_create(trail_file: str, output: str) -> None:
+    """Create a Merkle batch from an audit trail."""
+    trail = load_trail(trail_file)
+    b, tree = create_batch_from_trail(trail)
+
+    # Also save proofs alongside
+    proofs = {
+        e.entry_id: get_proof_for_item(e.entry_id, tree, b)
+        for e in trail.entries
+    }
+    proofs_path = output.rsplit(".", 1)[0] + ".proofs.json"
+    save_batch(b, output)
+    save_proofs(proofs, proofs_path)
+
+    click.echo(f"Batch saved to {output}")
+    click.echo(f"Proofs saved to {proofs_path}")
+    click.echo(f"  batch_id:    {b.batch_id}")
+    click.echo(f"  merkle_root: {b.merkle_root}")
+    click.echo(f"  items:       {b.item_count}")
+
+
+# ── batch anchor ────────────────────────────────────────────────────────────
+
+
+@batch.command("anchor")
+@click.argument("batch_file")
+@click.option("--creator-keys", required=True, help="Path to creator key pair JSON (for funding).")
+@click.option("--network", default="testnet", type=click.Choice(["testnet", "mainnet"]), help="Bitcoin network.")
+@_handle_error
+def batch_anchor(batch_file: str, creator_keys: str, network: str) -> None:
+    """Anchor a batch's Merkle root to Bitcoin via OP_RETURN."""
+    b = load_batch(batch_file)
+    ck = agentcert.load_keys(creator_keys)
+
+    click.echo(f"Anchoring batch {b.batch_id[:16]}... to Bitcoin {network}...")
+    address = agentcert.derive_bitcoin_address(ck, network=network)
+    click.echo(f"  Funding address: {address}")
+
+    anchored = _anchor_batch(b, creator_keys=ck, network=network)
+    save_batch(anchored, batch_file)
+
+    click.echo(f"Batch anchored and saved to {batch_file}")
+    click.echo(f"  txid: {anchored.anchor_receipt.txid}")
+
+
+# ── batch proof ─────────────────────────────────────────────────────────────
+
+
+@batch.command("proof")
+@click.argument("batch_file")
+@click.option("--entry-id", required=True, help="Entry ID (hash) to get proof for.")
+@click.option("--proofs-file", default=None, help="Path to proofs JSON (default: <batch>.proofs.json).")
+@click.option("--output", "-o", default=None, help="Output file for the single proof (default: stdout).")
+@_handle_error
+def batch_proof(batch_file: str, entry_id: str, proofs_file: str | None, output: str | None) -> None:
+    """Get and display the Merkle proof for a specific entry."""
+    if proofs_file is None:
+        proofs_file = batch_file.rsplit(".", 1)[0] + ".proofs.json"
+
+    proofs = load_proofs(proofs_file)
+    if entry_id not in proofs:
+        click.secho(f"Error: entry_id {entry_id[:16]}... not found in proofs file", fg="red", err=True)
+        sys.exit(1)
+
+    proof = proofs[entry_id]
+    proof_data = proof.to_dict()
+
+    if output:
+        from pathlib import Path
+        Path(output).write_text(json.dumps(proof_data, indent=2) + "\n")
+        click.echo(f"Proof saved to {output}")
+    else:
+        click.echo(json.dumps(proof_data, indent=2))
+
+
+# ── batch verify ────────────────────────────────────────────────────────────
+
+
+@batch.command("verify")
+@click.argument("batch_file")
+@click.option("--entry-id", required=True, help="Entry ID (hash) to verify.")
+@click.option("--proofs-file", default=None, help="Path to proofs JSON (default: <batch>.proofs.json).")
+@_handle_error
+def batch_verify(batch_file: str, entry_id: str, proofs_file: str | None) -> None:
+    """Verify an entry against an anchored batch."""
+    if proofs_file is None:
+        proofs_file = batch_file.rsplit(".", 1)[0] + ".proofs.json"
+
+    b = load_batch(batch_file)
+    proofs = load_proofs(proofs_file)
+
+    if entry_id not in proofs:
+        click.secho(f"Error: entry_id {entry_id[:16]}... not found in proofs file", fg="red", err=True)
+        sys.exit(1)
+
+    proof = proofs[entry_id]
+    result = verify_batch_proof(entry_id, proof, b)
+
+    for check in result.checks:
+        symbol = click.style("PASS", fg="green") if check.passed else click.style("FAIL", fg="red")
+        click.echo(f"  [{symbol}] {check.name}: {check.detail}")
+
+    click.echo()
+    color = "green" if result.valid else "red"
+    click.secho(f"Status: {result.status}", fg=color, bold=True)
+
+
+# ── batch inspect ───────────────────────────────────────────────────────────
+
+
+@batch.command("inspect")
+@click.argument("batch_file")
+@_handle_error
+def batch_inspect(batch_file: str) -> None:
+    """Display batch details."""
+    b = load_batch(batch_file)
+
+    click.echo(f"Batch: {b.batch_id}")
+    click.echo(f"  merkle_root: {b.merkle_root}")
+    click.echo(f"  items:       {b.item_count}")
+    click.echo(f"  created:     {_format_timestamp(b.timestamp)}")
+
+    if b.anchor_receipt:
+        click.echo(f"  anchored:    yes")
+        click.echo(f"    txid:      {b.anchor_receipt.txid}")
+        click.echo(f"    network:   {b.anchor_receipt.network}")
+    else:
+        click.echo(f"  anchored:    no")
+
+    if b.item_hashes:
+        click.echo(f"  item hashes:")
+        for i, h in enumerate(b.item_hashes):
+            click.echo(f"    [{i}] {h}")

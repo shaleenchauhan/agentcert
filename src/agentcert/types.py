@@ -471,3 +471,130 @@ class AuditTrailVerificationResult:
     def valid(self) -> bool:
         """Whether the trail is valid."""
         return self.status == "VALID"
+
+
+# ── Merkle Batch Types ─────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class MerkleProof:
+    """Proof of inclusion for a single leaf in a Merkle tree.
+
+    Attributes:
+        leaf_hash: Hex string of the leaf hash.
+        leaf_index: Position of the leaf in the tree.
+        siblings: Hex strings of sibling hashes, bottom to top.
+        directions: "left" or "right" — which side each sibling is on.
+        root: Hex string of the Merkle root.
+    """
+
+    leaf_hash: str
+    leaf_index: int
+    siblings: tuple[str, ...]
+    directions: tuple[str, ...]
+    root: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict for JSON encoding."""
+        return {
+            "leaf_hash": self.leaf_hash,
+            "leaf_index": self.leaf_index,
+            "siblings": list(self.siblings),
+            "directions": list(self.directions),
+            "root": self.root,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MerkleProof:
+        """Deserialize from a plain dict."""
+        return cls(
+            leaf_hash=data["leaf_hash"],
+            leaf_index=data["leaf_index"],
+            siblings=tuple(data["siblings"]),
+            directions=tuple(data["directions"]),
+            root=data["root"],
+        )
+
+
+@dataclass(frozen=True)
+class Batch:
+    """A batch of items anchored together via Merkle tree.
+
+    Attributes:
+        batch_id: SHA-256 of the Merkle root + timestamp.
+        merkle_root: Hex string of the Merkle root.
+        item_count: Number of items in the batch.
+        item_hashes: Hex strings of all leaf hashes, in order.
+        timestamp: When the batch was created (Unix seconds).
+        anchor_receipt: Set after anchoring, None before.
+    """
+
+    batch_id: str
+    merkle_root: str
+    item_count: int
+    item_hashes: tuple[str, ...]
+    timestamp: int
+    anchor_receipt: AnchorReceipt | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict for JSON encoding."""
+        d: dict[str, Any] = {
+            "batch_id": self.batch_id,
+            "merkle_root": self.merkle_root,
+            "item_count": self.item_count,
+            "item_hashes": list(self.item_hashes),
+            "timestamp": self.timestamp,
+            "anchor_receipt": self.anchor_receipt.to_dict() if self.anchor_receipt else None,
+        }
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Batch:
+        """Deserialize from a plain dict."""
+        receipt_data = data.get("anchor_receipt")
+        return cls(
+            batch_id=data["batch_id"],
+            merkle_root=data["merkle_root"],
+            item_count=data["item_count"],
+            item_hashes=tuple(data["item_hashes"]),
+            timestamp=data["timestamp"],
+            anchor_receipt=AnchorReceipt.from_dict(receipt_data) if receipt_data else None,
+        )
+
+
+@dataclass(frozen=True)
+class BatchVerificationCheck:
+    """Result of a single batch verification check.
+
+    Attributes:
+        name: Check name (e.g. "merkle_proof").
+        passed: Whether the check passed.
+        detail: Human-readable description of the result.
+    """
+
+    name: str
+    passed: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class BatchVerificationResult:
+    """Result of verifying an item against a batch anchor.
+
+    Attributes:
+        valid: Whether all applicable checks passed.
+        status: "VALID", "INVALID", or "NOT_ANCHORED".
+        item_hash: The item hash that was verified.
+        merkle_root: The Merkle root of the batch.
+        proof_valid: Whether the Merkle proof checks out.
+        anchor_valid: Whether the anchor checks out (None if not anchored).
+        checks: List of individual checks.
+    """
+
+    valid: bool
+    status: str
+    item_hash: str
+    merkle_root: str
+    proof_valid: bool
+    anchor_valid: bool | None
+    checks: tuple[BatchVerificationCheck, ...]
