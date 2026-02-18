@@ -97,6 +97,29 @@ agentcert revoke cert-v2.json \
 
 # Verify the full chain
 agentcert verify-chain cert.json cert-v2.json revoke.json
+
+# --- Audit Trail ---
+
+# Create an audit trail bound to a certificate
+agentcert audit create cert.json --agent-keys agent.keys.json -o trail.json
+
+# Log actions
+agentcert audit log trail.json --agent-keys agent.keys.json \
+  --action-type API_CALL --summary "Called weather API" \
+  --detail '{"url": "https://api.weather.com", "status": 200}'
+
+agentcert audit log trail.json --agent-keys agent.keys.json \
+  --action-type DECISION --summary "Selected cheapest vendor"
+
+agentcert audit log trail.json --agent-keys agent.keys.json \
+  --action-type TRANSACTION --summary "Placed order for 42 widgets" \
+  --detail '{"vendor": "Acme", "amount": 42.0}'
+
+# Verify the trail (with optional certificate binding)
+agentcert audit verify trail.json --cert cert.json
+
+# Inspect the trail
+agentcert audit inspect trail.json --entries
 ```
 
 ## SDK API
@@ -179,6 +202,61 @@ chain_result = agentcert.verify_chain([cert, updated, revocation])
 print(chain_result.status)  # "REVOKED"
 print(chain_result.valid)   # True (REVOKED is a valid terminal state)
 ```
+
+### Audit Trail
+
+Create a tamper-evident log of every action an agent takes, cryptographically signed and hash-chained:
+
+```python
+# Create an audit trail bound to a certificate
+trail = agentcert.create_audit_trail(cert, agent_keys)
+
+# Log actions (each entry is signed by the agent and chained to the previous)
+agentcert.log_action(
+    trail, agent_keys,
+    action_type=agentcert.ActionType.API_CALL,
+    action_summary="Queried vendor pricing API",
+    action_detail={"url": "https://api.vendors.example/prices", "status": 200},
+)
+
+agentcert.log_action(
+    trail, agent_keys,
+    action_type=agentcert.ActionType.DECISION,
+    action_summary="Selected cheapest vendor: Acme Corp",
+)
+
+agentcert.log_action(
+    trail, agent_keys,
+    action_type=agentcert.ActionType.TRANSACTION,
+    action_summary="Placed purchase order for 500 widgets",
+    action_detail={"vendor": "Acme Corp", "quantity": 500, "total": 6250.00},
+)
+
+# Verify the full trail (11 checks)
+result = agentcert.verify_audit_trail(trail, cert)
+print(result.status)  # "VALID"
+
+# Verify a single entry (6 checks)
+entry_result = agentcert.verify_audit_entry(trail.entries[0], cert)
+
+# Inspect
+info = agentcert.get_trail_info(trail)
+print(info.entry_count)  # 3
+
+# Filter entries
+api_calls = agentcert.get_trail_entries(trail, action_type=agentcert.ActionType.API_CALL)
+recent = agentcert.get_trail_entries(trail, start=1, end=2)
+
+# Save / Load
+agentcert.save_trail(trail, "trail.json")
+trail = agentcert.load_trail("trail.json")
+```
+
+Action types: `API_CALL`, `TOOL_USE`, `DECISION`, `DATA_ACCESS`, `TRANSACTION`, `COMMUNICATION`, `ERROR`, `CUSTOM`.
+
+Entry verification runs 6 checks: entry_id integrity, agent_id derivation, agent signature, sequence validity, timestamp validity, and certificate binding.
+
+Trail verification runs 11 checks: non-empty trail, trail_id/cert_id/agent consistency, first-entry linkage, hash-chain integrity, sequence continuity, timestamp ordering, all entry IDs, all signatures, and certificate binding.
 
 ### Bitcoin Anchoring
 
@@ -267,6 +345,7 @@ pytest --cov=agentcert --cov-report=term-missing
 # Run examples
 python examples/quickstart.py
 python examples/full_lifecycle.py
+python examples/audit_trail_demo.py
 ```
 
 ## Project Structure
@@ -274,17 +353,19 @@ python examples/full_lifecycle.py
 ```
 agentcert/
   src/agentcert/
-    __init__.py          # Public API (33 exports, no submodule imports needed)
+    __init__.py          # Public API (49 exports, no submodule imports needed)
     keys.py              # Key generation, save, load (secp256k1)
     certificate.py       # Certificate creation, signing, serialization
     chain.py             # Update, revoke, chain verification
     anchor.py            # Bitcoin OP_RETURN + Blockstream API
-    verify.py            # 6-check verification with structured results
-    types.py             # KeyPair, Certificate, AgentMetadata, etc.
+    verify.py            # 6-check certificate verification
+    audit.py             # Audit trail creation, logging, persistence
+    audit_verify.py      # 6-check entry + 11-check trail verification
+    types.py             # KeyPair, Certificate, AuditEntry, ActionType, etc.
     exceptions.py        # Custom exception hierarchy
-    cli.py               # Click-based CLI (8 commands)
-  tests/                 # 119 tests, 93% coverage
-  examples/              # quickstart.py, full_lifecycle.py
+    cli.py               # Click-based CLI (12 commands)
+  tests/                 # 191 tests
+  examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py
   papers/                # Whitepaper, technical spec, condensed overview
 ```
 

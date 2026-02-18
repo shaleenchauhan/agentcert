@@ -35,3 +35,7 @@ class ChainError(AgentCertError):
 
 class SerializationError(AgentCertError):
     """Raised when certificate serialization or deserialization fails."""
+
+
+class AuditError(AgentCertError):
+    """Raised when audit trail operations fail."""

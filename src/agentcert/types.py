@@ -19,6 +19,22 @@ class CertType(IntEnum):
     REVOCATION = 3
 
 
+class ActionType(IntEnum):
+    """Audit trail action type codes.
+
+    Categories of actions an agent can perform, logged in the audit trail.
+    """
+
+    API_CALL = 1
+    TOOL_USE = 2
+    DECISION = 3
+    DATA_ACCESS = 4
+    TRANSACTION = 5
+    COMMUNICATION = 6
+    ERROR = 7
+    CUSTOM = 99
+
+
 @dataclass(frozen=True)
 class KeyPair:
     """A secp256k1 key pair.
@@ -274,3 +290,184 @@ class ChainResult:
     def valid(self) -> bool:
         """Whether the chain is valid (ACTIVE or REVOKED, not INVALID)."""
         return self.status in ("ACTIVE", "REVOKED")
+
+
+# ── Audit Trail Types ────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class AuditEntry:
+    """A single entry in an agent's audit trail.
+
+    Each entry is cryptographically signed by the agent and chained to the
+    previous entry via ``previous_entry_id``, forming a tamper-evident log.
+
+    Attributes:
+        entry_id: SHA-256 hash of the entry body (all fields except entry_id
+            and agent_signature).
+        trail_id: Identifier linking this entry to a specific audit trail.
+        sequence: Monotonically increasing sequence number (0-based).
+        timestamp: Unix timestamp of when the action was logged.
+        action_type: Category of the action (see ActionType enum).
+        action_summary: Brief human-readable description of the action.
+        action_detail: Structured details about the action.
+        agent_public_key: Compressed public key of the signing agent (hex).
+        agent_id: SHA-256 of agent_public_key.
+        cert_id: The cert_id of the certificate this trail is bound to.
+        previous_entry_id: entry_id of the prior entry, or None for the first.
+        agent_signature: ECDSA signature over the entry body (hex).
+    """
+
+    entry_id: str
+    trail_id: str
+    sequence: int
+    timestamp: int
+    action_type: int
+    action_summary: str
+    action_detail: dict[str, Any]
+    agent_public_key: str
+    agent_id: str
+    cert_id: str
+    previous_entry_id: str | None
+    agent_signature: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict for JSON encoding."""
+        return {
+            "entry_id": self.entry_id,
+            "trail_id": self.trail_id,
+            "sequence": self.sequence,
+            "timestamp": self.timestamp,
+            "action_type": self.action_type,
+            "action_summary": self.action_summary,
+            "action_detail": self.action_detail,
+            "agent_public_key": self.agent_public_key,
+            "agent_id": self.agent_id,
+            "cert_id": self.cert_id,
+            "previous_entry_id": self.previous_entry_id,
+            "agent_signature": self.agent_signature,
+        }
+
+    def body_dict(self) -> dict[str, Any]:
+        """Return the entry body (all fields except entry_id and agent_signature).
+
+        This is the data that gets hashed to produce entry_id and signed
+        to produce agent_signature.
+        """
+        d = self.to_dict()
+        d.pop("entry_id")
+        d.pop("agent_signature")
+        return d
+
+    def body_bytes(self) -> bytes:
+        """Return the canonical JSON-encoded body bytes."""
+        return json.dumps(
+            self.body_dict(), sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AuditEntry:
+        """Deserialize from a plain dict."""
+        return cls(
+            entry_id=data["entry_id"],
+            trail_id=data["trail_id"],
+            sequence=data["sequence"],
+            timestamp=data["timestamp"],
+            action_type=data["action_type"],
+            action_summary=data["action_summary"],
+            action_detail=data["action_detail"],
+            agent_public_key=data["agent_public_key"],
+            agent_id=data["agent_id"],
+            cert_id=data["cert_id"],
+            previous_entry_id=data["previous_entry_id"],
+            agent_signature=data["agent_signature"],
+        )
+
+
+@dataclass(frozen=True)
+class AuditTrailInfo:
+    """Summary metadata for an audit trail.
+
+    Attributes:
+        trail_id: Unique trail identifier (SHA-256 hash).
+        cert_id: The certificate this trail is bound to.
+        agent_id: The agent whose actions are logged.
+        entry_count: Number of entries in the trail.
+        created: Unix timestamp of the first entry (or trail creation).
+        last_entry: Unix timestamp of the most recent entry, or None.
+    """
+
+    trail_id: str
+    cert_id: str
+    agent_id: str
+    entry_count: int
+    created: int
+    last_entry: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict."""
+        return {
+            "trail_id": self.trail_id,
+            "cert_id": self.cert_id,
+            "agent_id": self.agent_id,
+            "entry_count": self.entry_count,
+            "created": self.created,
+            "last_entry": self.last_entry,
+        }
+
+
+@dataclass(frozen=True)
+class AuditVerificationCheck:
+    """Result of a single audit entry verification check.
+
+    Attributes:
+        name: Check name (e.g. "entry_id_integrity").
+        passed: Whether the check passed.
+        detail: Human-readable description of the result.
+    """
+
+    name: str
+    passed: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class AuditVerificationResult:
+    """Result of verifying a single audit entry.
+
+    Attributes:
+        status: "VALID" or "INVALID".
+        checks: Individual check results.
+        entry_id: The entry_id that was verified.
+    """
+
+    status: str
+    checks: tuple[AuditVerificationCheck, ...]
+    entry_id: str
+
+    @property
+    def valid(self) -> bool:
+        """Whether the entry is valid."""
+        return self.status == "VALID"
+
+
+@dataclass(frozen=True)
+class AuditTrailVerificationResult:
+    """Result of verifying an entire audit trail.
+
+    Attributes:
+        status: "VALID" or "INVALID".
+        checks: All checks across the trail.
+        trail_id: The trail that was verified.
+        entry_count: Number of entries verified.
+    """
+
+    status: str
+    checks: tuple[AuditVerificationCheck, ...]
+    trail_id: str
+    entry_count: int
+
+    @property
+    def valid(self) -> bool:
+        """Whether the trail is valid."""
+        return self.status == "VALID"

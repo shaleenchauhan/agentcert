@@ -59,11 +59,31 @@ from agentcert.anchor import (
 
 from agentcert.verify import verify
 
+# ── Audit Trail ─────────────────────────────────────────────────────────────
+
+from agentcert.audit import (
+    AuditTrail,
+    create_audit_trail,
+    get_trail_entries,
+    get_trail_info,
+    load_trail,
+    log_action,
+    save_trail,
+)
+
+from agentcert.audit_verify import verify_audit_entry, verify_audit_trail
+
 # ── Types ────────────────────────────────────────────────────────────────────
 
 from agentcert.types import (
+    ActionType,
     AgentMetadata,
     AnchorReceipt,
+    AuditEntry,
+    AuditTrailInfo,
+    AuditTrailVerificationResult,
+    AuditVerificationCheck,
+    AuditVerificationResult,
     Certificate,
     CertType,
     ChainResult,
@@ -77,6 +97,7 @@ from agentcert.types import (
 from agentcert.exceptions import (
     AgentCertError,
     AnchorError,
+    AuditError,
     CertificateError,
     ChainError,
     KeyGenerationError,
@@ -108,6 +129,16 @@ __all__ = [
     "load_receipt",
     # Verification
     "verify",
+    # Audit Trail
+    "AuditTrail",
+    "create_audit_trail",
+    "log_action",
+    "get_trail_info",
+    "get_trail_entries",
+    "save_trail",
+    "load_trail",
+    "verify_audit_entry",
+    "verify_audit_trail",
     # Types
     "KeyPair",
     "Certificate",
@@ -117,6 +148,12 @@ __all__ = [
     "VerificationResult",
     "VerificationCheck",
     "ChainResult",
+    "ActionType",
+    "AuditEntry",
+    "AuditTrailInfo",
+    "AuditVerificationCheck",
+    "AuditVerificationResult",
+    "AuditTrailVerificationResult",
     # Exceptions
     "AgentCertError",
     "KeyGenerationError",
@@ -127,4 +164,5 @@ __all__ = [
     "VerificationError",
     "ChainError",
     "SerializationError",
+    "AuditError",
 ]

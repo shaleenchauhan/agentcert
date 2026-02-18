@@ -9,7 +9,10 @@ from datetime import datetime, timezone
 import click
 
 import agentcert
+from agentcert.audit import create_audit_trail, log_action, load_trail, save_trail, get_trail_info
+from agentcert.audit_verify import verify_audit_entry, verify_audit_trail
 from agentcert.exceptions import AgentCertError
+from agentcert.types import ActionType
 
 
 def _parse_expires(value: str) -> int:
@@ -321,3 +324,155 @@ def verify_chain(cert_files: tuple[str, ...]) -> None:
     click.echo()
     color = "green" if result.valid else "red"
     click.secho(f"Chain status: {result.status} ({result.chain_length} cert(s))", fg=color, bold=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Audit trail subcommand group
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+_ACTION_TYPES = {a.name.lower(): a for a in ActionType}
+_ACTION_TYPE_NAMES = ", ".join(_ACTION_TYPES.keys())
+
+
+def _parse_action_type(value: str) -> ActionType:
+    """Parse an action type string (name or int) into an ActionType."""
+    lower = value.strip().lower()
+    if lower in _ACTION_TYPES:
+        return _ACTION_TYPES[lower]
+    try:
+        return ActionType(int(value))
+    except (ValueError, KeyError):
+        raise click.BadParameter(
+            f"Invalid action type: {value!r}. "
+            f"Use a name ({_ACTION_TYPE_NAMES}) or integer."
+        )
+
+
+@cli.group()
+def audit() -> None:
+    """Audit trail commands (create, log, verify, inspect)."""
+
+
+# ── audit create ─────────────────────────────────────────────────────────────
+
+
+@audit.command("create")
+@click.argument("cert_file")
+@click.option("--agent-keys", required=True, help="Path to agent key pair JSON.")
+@click.option("--output", "-o", required=True, help="Output file path for the audit trail.")
+@_handle_error
+def audit_create(cert_file: str, agent_keys: str, output: str) -> None:
+    """Create a new audit trail bound to a certificate."""
+    cert = agentcert.load_certificate(cert_file)
+    ak = agentcert.load_keys(agent_keys)
+
+    trail = create_audit_trail(cert, ak)
+    save_trail(trail, output)
+
+    click.echo(f"Audit trail created: {output}")
+    click.echo(f"  trail_id: {trail.trail_id}")
+    click.echo(f"  cert_id:  {trail.cert_id}")
+    click.echo(f"  agent_id: {trail.agent_id}")
+
+
+# ── audit log ────────────────────────────────────────────────────────────────
+
+
+@audit.command("log")
+@click.argument("trail_file")
+@click.option("--agent-keys", required=True, help="Path to agent key pair JSON.")
+@click.option("--action-type", required=True, help=f"Action type ({_ACTION_TYPE_NAMES}, or integer).")
+@click.option("--summary", required=True, help="Brief description of the action.")
+@click.option("--detail", default=None, help="JSON string with structured action details.")
+@_handle_error
+def audit_log(
+    trail_file: str, agent_keys: str, action_type: str, summary: str, detail: str | None,
+) -> None:
+    """Log a new action to an audit trail."""
+    trail = load_trail(trail_file)
+    ak = agentcert.load_keys(agent_keys)
+    at = _parse_action_type(action_type)
+
+    action_detail = {}
+    if detail:
+        try:
+            action_detail = json.loads(detail)
+        except json.JSONDecodeError as exc:
+            raise click.BadParameter(f"--detail must be valid JSON: {exc}")
+
+    entry = log_action(
+        trail, ak,
+        action_type=at,
+        action_summary=summary,
+        action_detail=action_detail,
+    )
+
+    save_trail(trail, trail_file)
+
+    click.echo(f"Action logged (entry {entry.sequence})")
+    click.echo(f"  entry_id: {entry.entry_id}")
+    click.echo(f"  type:     {ActionType(entry.action_type).name}")
+    click.echo(f"  summary:  {entry.action_summary}")
+
+
+# ── audit verify ─────────────────────────────────────────────────────────────
+
+
+@audit.command("verify")
+@click.argument("trail_file")
+@click.option("--cert", "cert_file", default=None, help="Path to certificate JSON (for binding check).")
+@_handle_error
+def audit_verify(trail_file: str, cert_file: str | None) -> None:
+    """Verify an audit trail (all 11 checks)."""
+    trail = load_trail(trail_file)
+    cert = agentcert.load_certificate(cert_file) if cert_file else None
+
+    result = verify_audit_trail(trail, cert)
+
+    for check in result.checks:
+        symbol = click.style("PASS", fg="green") if check.passed else click.style("FAIL", fg="red")
+        click.echo(f"  [{symbol}] {check.name}: {check.detail}")
+
+    click.echo()
+    if result.valid:
+        click.secho(
+            f"Status: {result.status} ({result.entry_count} entry(ies))",
+            fg="green", bold=True,
+        )
+    else:
+        click.secho(
+            f"Status: {result.status} ({result.entry_count} entry(ies))",
+            fg="red", bold=True,
+        )
+
+
+# ── audit inspect ────────────────────────────────────────────────────────────
+
+
+@audit.command("inspect")
+@click.argument("trail_file")
+@click.option("--entries/--no-entries", default=False, help="Show individual entries.")
+@_handle_error
+def audit_inspect(trail_file: str, entries: bool) -> None:
+    """Display audit trail details."""
+    trail = load_trail(trail_file)
+    info = get_trail_info(trail)
+
+    click.echo(f"Audit Trail: {info.trail_id}")
+    click.echo(f"  cert_id:     {info.cert_id}")
+    click.echo(f"  agent_id:    {info.agent_id}")
+    click.echo(f"  entries:     {info.entry_count}")
+    click.echo(f"  created:     {_format_timestamp(info.created)}")
+    if info.last_entry:
+        click.echo(f"  last entry:  {_format_timestamp(info.last_entry)}")
+
+    if entries and trail.entries:
+        click.echo()
+        for entry in trail.entries:
+            action_name = ActionType(entry.action_type).name
+            click.echo(f"  [{entry.sequence}] {_format_timestamp(entry.timestamp)} "
+                        f"{action_name}: {entry.action_summary}")
+            click.echo(f"       entry_id: {entry.entry_id}")
+            if entry.action_detail:
+                click.echo(f"       detail:   {json.dumps(entry.action_detail)}")
