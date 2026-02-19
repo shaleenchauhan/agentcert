@@ -348,11 +348,12 @@ class TestVerify:
         resp = client.get(f"/api/v1/verify/{entry_id}")
         assert resp.status_code == 200
         data = resp.json()
+        assert data["status"] == "NOT_ANCHORED"
         assert data["checks"]["entry_integrity"] is True
         assert data["checks"]["agent_signature"] is True
         assert data["checks"]["cert_binding"] is True
         assert data["checks"]["merkle_proof"] is True
-        # anchor_on_chain is False because no real Bitcoin anchoring in tests
+        assert data["checks"]["anchor_on_chain"] is False
         assert "batch" in data
 
     def test_verify_not_found(self, client):
@@ -465,13 +466,15 @@ class TestFullFlow:
         assert "proof" in data
         assert data["proof"]["root"] == data["merkle_root"]
 
-        # Verify with batch
+        # Verify with batch (NOT_ANCHORED because no Bitcoin wallet configured)
         resp = client.get(f"/api/v1/verify/{trail.entries[1].entry_id}")
         data = resp.json()
+        assert data["status"] == "NOT_ANCHORED"
         assert data["checks"]["entry_integrity"] is True
         assert data["checks"]["agent_signature"] is True
         assert data["checks"]["cert_binding"] is True
         assert data["checks"]["merkle_proof"] is True
+        assert data["checks"]["anchor_on_chain"] is False
 
         # Check stats
         resp = client.get("/api/v1/stats")

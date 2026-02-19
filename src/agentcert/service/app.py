@@ -283,7 +283,16 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             checks["anchor_on_chain"] = False
 
         all_valid = all(checks.values())
-        status = "VALID" if all_valid else "PENDING" if not proof_record else "INVALID"
+        if all_valid:
+            status = "VALID"
+        elif not proof_record:
+            status = "PENDING"
+        elif not checks["anchor_on_chain"] and all(
+            v for k, v in checks.items() if k != "anchor_on_chain"
+        ):
+            status = "NOT_ANCHORED"
+        else:
+            status = "INVALID"
 
         response: dict[str, Any] = {
             "entry_id": entry_id,
