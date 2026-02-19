@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentcert"
-version = "0.2.0"
+version = "0.3.0"
 description = "Bitcoin-anchored identity certificates for AI agents"
 readme = "README.md"
 license = "MIT"
@@ -63,6 +63,9 @@ Issues = "https://github.com/shaleenchauhan/agentcert/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"agentcert.service" = ["templates/*.html", "static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
