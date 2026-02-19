@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Batches{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Batches</h1>
+    <p>Merkle batches and Bitcoin anchoring status</p>
+</div>
+
+<div class="card">
+    {% if batches %}
+    <div class="card-body-flush table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Batch ID</th>
+                    <th>Entries</th>
+                    <th>Merkle Root</th>
+                    <th>Anchor</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for batch in batches %}
+                <tr>
+                    <td><a href="/dashboard/batches/{{ batch.batch_id }}" class="hash">{{ batch.batch_id[:16] }}...</a></td>
+                    <td>{{ batch.item_count }}</td>
+                    <td><span class="hash">{{ batch.merkle_root[:16] }}...</span></td>
+                    <td>
+                        {% if batch.anchor_receipt %}
+                        <span class="badge badge-green">Anchored</span>
+                        <span class="hash" style="margin-left: 4px;">txid: {{ batch.anchor_receipt.txid[:12] }}...</span>
+                        {% else %}
+                        <span class="badge badge-amber">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ time_ago(batch.timestamp) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No batches yet. Submit entries and trigger a batch cycle to create batches.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

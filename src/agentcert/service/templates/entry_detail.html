@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Entry {{ entry.entry_id[:12] }}...{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Entry Detail</h1>
+    <p>{{ action_label(entry.action_type) }} — {{ entry.action_summary }}</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Entry Information</h2>
+    </div>
+    <div class="card-body">
+        <dl class="detail-grid">
+            <dt>Entry ID</dt>
+            <dd>
+                <span class="hash hash-full">{{ entry.entry_id }}</span>
+                <button class="copy-btn" data-copy="{{ entry.entry_id }}" title="Copy">&#x2398;</button>
+            </dd>
+
+            <dt>Trail ID</dt>
+            <dd>
+                <span class="hash">{{ entry.trail_id[:24] }}...</span>
+                <button class="copy-btn" data-copy="{{ entry.trail_id }}" title="Copy">&#x2398;</button>
+            </dd>
+
+            <dt>Agent</dt>
+            <dd>
+                {% if cert %}
+                <a href="/dashboard/agents/{{ entry.cert_id }}">{{ agent_name }}</a>
+                {% else %}
+                {{ agent_name }}
+                {% endif %}
+            </dd>
+
+            <dt>Certificate ID</dt>
+            <dd>
+                {% if cert %}
+                <a href="/dashboard/agents/{{ entry.cert_id }}" class="hash">{{ entry.cert_id[:24] }}...</a>
+                {% else %}
+                <span class="hash">{{ entry.cert_id[:24] }}...</span>
+                {% endif %}
+                <button class="copy-btn" data-copy="{{ entry.cert_id }}" title="Copy">&#x2398;</button>
+            </dd>
+
+            <dt>Agent ID</dt>
+            <dd>
+                <span class="hash">{{ entry.agent_id[:24] }}...</span>
+                <button class="copy-btn" data-copy="{{ entry.agent_id }}" title="Copy">&#x2398;</button>
+            </dd>
+
+            <dt>Sequence</dt>
+            <dd>{{ entry.sequence }}</dd>
+
+            <dt>Timestamp</dt>
+            <dd>{{ format_ts(entry.timestamp) }}</dd>
+
+            <dt>Action Type</dt>
+            <dd>{{ action_label(entry.action_type) }}</dd>
+
+            <dt>Summary</dt>
+            <dd>{{ entry.action_summary }}</dd>
+
+            <dt>Signature</dt>
+            <dd>
+                <span class="hash">{{ entry.agent_signature[:24] }}...</span>
+                <button class="copy-btn" data-copy="{{ entry.agent_signature }}" title="Copy">&#x2398;</button>
+            </dd>
+
+            {% if entry.previous_entry_id %}
+            <dt>Previous Entry</dt>
+            <dd><a href="/dashboard/entries/{{ entry.previous_entry_id }}" class="hash">{{ entry.previous_entry_id[:24] }}...</a></dd>
+            {% endif %}
+        </dl>
+
+        {% if entry.action_detail and entry.action_detail != {} %}
+        <div style="margin-top: 16px;">
+            <span class="collapsible-toggle collapsed" data-target="action-detail-content">Action Detail</span>
+            <div id="action-detail-content" class="collapsible-content collapsed">
+                <pre class="proof-path" style="margin-top: 8px;">{{ entry.action_detail | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Verification</h2>
+    </div>
+    <div class="card-body">
+        <div id="entry-verification" data-entry-id="{{ entry.entry_id }}">
+            <p style="color: var(--color-text-muted);">Loading verification...</p>
+        </div>
+    </div>
+</div>
+
+{% if proof %}
+<div class="card">
+    <div class="card-header">
+        <h2>Merkle Proof</h2>
+    </div>
+    <div class="card-body">
+        <dl class="detail-grid" style="margin-bottom: 16px;">
+            <dt>Batch</dt>
+            <dd><a href="/dashboard/batches/{{ batch.batch_id }}" class="hash">{{ batch.batch_id[:24] }}...</a></dd>
+
+            <dt>Leaf Index</dt>
+            <dd>{{ proof.leaf_index }} of {{ batch.item_count }}</dd>
+
+            <dt>Merkle Root</dt>
+            <dd>
+                <span class="hash">{{ proof.root[:24] }}...</span>
+                <button class="copy-btn" data-copy="{{ proof.root }}" title="Copy">&#x2398;</button>
+            </dd>
+        </dl>
+
+        <div class="proof-path">
+            <div class="node-root">Root: {{ proof.root[:32] }}...</div>
+            {% for i in range(proof.siblings | length - 1, -1, -1) %}
+            <div class="node" style="padding-left: {{ (proof.siblings | length - i) * 20 }}px;">
+                {% if proof.directions[i] == 'right' %}
+                &#x251C;&#x2500; [L] <span class="node-highlight">current hash</span>
+                <br>
+                <span style="padding-left: {{ (proof.siblings | length - i) * 20 }}px;">&#x2514;&#x2500; [R] {{ proof.siblings[i][:24] }}... (sibling)</span>
+                {% else %}
+                &#x251C;&#x2500; [L] {{ proof.siblings[i][:24] }}... (sibling)
+                <br>
+                <span style="padding-left: {{ (proof.siblings | length - i) * 20 }}px;">&#x2514;&#x2500; [R] <span class="node-highlight">current hash</span></span>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <div class="node" style="padding-left: {{ (proof.siblings | length + 1) * 20 }}px;">
+                <span class="node-highlight">Leaf [{{ proof.leaf_index }}]: {{ proof.leaf_hash[:24] }}...</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if anchor %}
+<div class="card">
+    <div class="card-header">
+        <h2>Bitcoin Anchor</h2>
+    </div>
+    <div class="card-body">
+        <dl class="detail-grid">
+            <dt>Transaction ID</dt>
+            <dd>
+                <span class="hash hash-full">{{ anchor.txid }}</span>
+                <button class="copy-btn" data-copy="{{ anchor.txid }}" title="Copy">&#x2398;</button>
+            </dd>
+
+            <dt>Network</dt>
+            <dd>{{ anchor.network }}</dd>
+
+            {% if anchor.op_return_hex %}
+            <dt>OP_RETURN</dt>
+            <dd><span class="mono">{{ anchor.op_return_hex }}</span></dd>
+            {% endif %}
+        </dl>
+
+        <a href="{{ anchor.explorer_url }}" target="_blank" rel="noopener" class="anchor-link">
+            View on Blockchain &rarr;
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var el = document.getElementById("entry-verification");
+    var entryId = el.getAttribute("data-entry-id");
+    fetch("/api/v1/verify/" + encodeURIComponent(entryId))
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderVerificationResult(data, el); })
+        .catch(function () { el.innerHTML = '<p class="check-fail">Verification failed</p>'; });
+});
+</script>
+{% endblock %}

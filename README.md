@@ -383,6 +383,26 @@ API endpoints:
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/stats` | Statistics |
 
+### Web Dashboard
+
+The anchoring service includes a built-in web dashboard for browsing agents, audit trails, batches, and running verifications — no terminal needed.
+
+Open `http://localhost:8932/dashboard` after starting the service.
+
+**Pages:**
+
+| Page | Path | Description |
+|------|------|-------------|
+| Overview | `/dashboard` | Stats cards, recent activity, recent batches |
+| Agents | `/dashboard/agents` | All registered certificates with entry counts and risk tiers |
+| Agent Detail | `/dashboard/agents/{cert_id}` | Certificate info + full audit trail table |
+| Entry Detail | `/dashboard/entries/{entry_id}` | Entry info, verification panel, Merkle proof path, Bitcoin anchor |
+| Batches | `/dashboard/batches` | All Merkle batches with anchor status |
+| Batch Detail | `/dashboard/batches/{batch_id}` | Batch info + list of entries |
+| Verify | `/dashboard/verify` | Paste an entry ID, verify instantly |
+
+Server-rendered HTML with Jinja2 templates. No React, no npm, no build step — just HTML + CSS + minimal JavaScript.
+
 ### LangChain Integration
 
 Add identity certificates and signed audit trails to any LangChain agent with a few lines of code. The middleware automatically captures all LLM calls, tool invocations, and agent decisions as signed audit entries. Works with both LangGraph agents and legacy `AgentExecutor`.
@@ -546,16 +566,19 @@ agentcert/
     batch.py             # Batch creation, anchoring, proof verification
     client.py            # SDK client for the anchoring service (httpx)
     service/
-      app.py             # FastAPI application (12 endpoints)
+      app.py             # FastAPI application (12 API endpoints + dashboard)
+      dashboard.py       # Dashboard route handlers (7 pages)
       models.py          # SQLite database layer
       scheduler.py       # Background batching + anchoring scheduler
       config.py          # ServiceConfig dataclass
+      templates/         # Jinja2 HTML templates (8 files)
+      static/            # CSS + JS (style.css, main.js)
     integrations/
       langchain.py       # AgentCertCallbackHandler + AgentCertMiddleware
     types.py             # KeyPair, Certificate, AuditEntry, Batch, MerkleProof, etc.
     exceptions.py        # Custom exception hierarchy
     cli.py               # Click-based CLI (21 commands)
-  tests/                 # 396 tests
+  tests/                 # 424 tests
   examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py, batch_anchor_demo.py, service_demo.py
   papers/                # Whitepaper, technical spec, condensed overview
 ```

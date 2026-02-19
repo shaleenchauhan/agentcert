@@ -350,6 +350,142 @@ class Database:
             "proof": json.loads(row["proof_json"]),
         }
 
+    # ── Dashboard Queries ─────────────────────────────────────────────────────
+
+    def get_all_certificates(self) -> list[dict[str, Any]]:
+        """Get all registered certificates, newest first.
+
+        Returns:
+            List of certificate dicts.
+        """
+        rows = self._conn.execute(
+            "SELECT certificate_json, registered_at FROM certificates "
+            "ORDER BY registered_at DESC",
+        ).fetchall()
+        results = []
+        for row in rows:
+            cert = json.loads(row["certificate_json"])
+            cert["_registered_at"] = row["registered_at"]
+            results.append(cert)
+        return results
+
+    def get_recent_entries(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Get the most recent entries across all agents.
+
+        Args:
+            limit: Maximum number of entries to return.
+
+        Returns:
+            List of entry dicts, newest first.
+        """
+        rows = self._conn.execute(
+            "SELECT entry_json, batch_id FROM entries "
+            "ORDER BY received_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        results = []
+        for row in rows:
+            entry = json.loads(row["entry_json"])
+            entry["_batch_id"] = row["batch_id"]
+            results.append(entry)
+        return results
+
+    def get_recent_batches(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Get the most recent batches.
+
+        Args:
+            limit: Maximum number of batches to return.
+
+        Returns:
+            List of batch dicts, newest first.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM batches ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [self._row_to_batch_dict(row) for row in rows]
+
+    def get_entries_by_cert(
+        self, cert_id: str, offset: int = 0, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Get entries for a specific certificate, newest first.
+
+        Args:
+            cert_id: The certificate ID.
+            offset: Number of entries to skip.
+            limit: Maximum number of entries to return.
+
+        Returns:
+            List of entry dicts with _batch_id attached.
+        """
+        rows = self._conn.execute(
+            "SELECT entry_json, batch_id FROM entries "
+            "WHERE cert_id = ? ORDER BY sequence DESC LIMIT ? OFFSET ?",
+            (cert_id, limit, offset),
+        ).fetchall()
+        results = []
+        for row in rows:
+            entry = json.loads(row["entry_json"])
+            entry["_batch_id"] = row["batch_id"]
+            results.append(entry)
+        return results
+
+    def get_entry_count_by_cert(self, cert_id: str) -> int:
+        """Get the number of entries for a specific certificate.
+
+        Args:
+            cert_id: The certificate ID.
+
+        Returns:
+            Entry count.
+        """
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE cert_id = ?",
+            (cert_id,),
+        ).fetchone()
+        return row[0]
+
+    def get_entries_by_batch(self, batch_id: str) -> list[dict[str, Any]]:
+        """Get all entries belonging to a batch.
+
+        Args:
+            batch_id: The batch ID.
+
+        Returns:
+            List of entry dicts.
+        """
+        rows = self._conn.execute(
+            "SELECT entry_json FROM entries WHERE batch_id = ? ORDER BY sequence",
+            (batch_id,),
+        ).fetchall()
+        return [json.loads(row["entry_json"]) for row in rows]
+
+    def get_all_batches(self) -> list[dict[str, Any]]:
+        """Get all batches, newest first.
+
+        Returns:
+            List of batch dicts.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM batches ORDER BY created_at DESC",
+        ).fetchall()
+        return [self._row_to_batch_dict(row) for row in rows]
+
+    def get_last_active_by_cert(self, cert_id: str) -> int | None:
+        """Get the timestamp of the most recent entry for a certificate.
+
+        Args:
+            cert_id: The certificate ID.
+
+        Returns:
+            Unix timestamp, or None if no entries.
+        """
+        row = self._conn.execute(
+            "SELECT MAX(received_at) FROM entries WHERE cert_id = ?",
+            (cert_id,),
+        ).fetchone()
+        return row[0] if row and row[0] else None
+
     # ── Stats ───────────────────────────────────────────────────────────────
 
     def get_stats(self) -> dict[str, Any]:

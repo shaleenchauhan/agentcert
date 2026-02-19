@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Verify{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Verification Tool</h1>
+    <p>Verify any audit entry by its ID — checks integrity, signature, certificate binding, Merkle proof, and Bitcoin anchor.</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form id="verify-form" class="verify-form">
+            <input type="text" id="entry-id-input" placeholder="Paste entry ID (SHA-256 hex)" autocomplete="off" spellcheck="false">
+            <button type="submit" class="btn btn-primary">Verify</button>
+        </form>
+
+        <div id="verify-result"></div>
+    </div>
+</div>
+{% endblock %}

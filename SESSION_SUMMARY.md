@@ -1,199 +1,133 @@
-# AgentCert — Phase 3b: Anchoring Service + SDK Client Session Summary
+# AgentCert — Phase 4: Web Dashboard Session Summary
 
 ## Overview
 
-Added a FastAPI anchoring service and httpx-based SDK client to AgentCert. The service receives signed audit entries, batches them into Merkle trees, anchors roots to Bitcoin, and serves proofs. The SDK client provides a Python interface for developers to interact with the service instead of managing Bitcoin transactions themselves.
+Added a server-rendered web dashboard to the AgentCert anchoring service. The dashboard makes the product visually demo-able — a compliance officer or potential customer opens a browser and can browse agents, audit trails, batches, and verify any entry against Bitcoin. No terminal, no JSON, no CLI.
 
-**Trust model:** Private keys stay on the developer's machine. Entries are signed before being sent. The service cannot forge entries. Even if compromised, all entries are independently verifiable.
+Built with Jinja2 templates, custom CSS, and minimal JavaScript. No React, no npm, no build step. Served by the same FastAPI server under `/dashboard`.
 
 ## Build Steps
 
 | Step | Description | Status |
 |------|-------------|--------|
-| 1 | Setup — `fastapi`, `uvicorn`, `httpx` as optional deps; `service/` package; `ServiceError`, `ClientError` exceptions | Done |
-| 2 | Database layer — SQLite via `sqlite3`, 4 tables, CRUD for certs/entries/batches/proofs | Done |
-| 3 | Service config — `ServiceConfig` dataclass, `from_env()`, `from_file()` | Done |
-| 4 | Background scheduler — `BatchScheduler` with batching loop using existing `create_batch` + anchor infrastructure | Done |
-| 5 | FastAPI app — 12 endpoints: certificates, entries, trails, proofs, verify, batches, admin, health, stats | Done |
-| 6 | SDK client — `AgentCertClient` class, 14 methods, httpx-based, context manager | Done |
-| 7 | Tests — 59 new tests (337 → 396 total), all passing | Done |
-| 8 | CLI — `service` subcommand group with start, health, stats, force-batch | Done |
-| 9 | Public API — updated `__init__.py` (69 → 72 exports), conditional client import | Done |
-| 10 | Example — `examples/service_demo.py` full flow demo | Done |
-| 11 | README — added anchoring service and SDK client sections, updated project structure | Done |
+| 1 | Setup — `jinja2` dep, `templates/` and `static/` dirs, 9 new DB query methods in `models.py` | Done |
+| 2 | CSS (`static/style.css`) — complete stylesheet: layout, nav, cards, tables, status badges, hash truncation, responsive | Done |
+| 3 | JS (`static/main.js`) — copy-to-clipboard, auto-refresh, collapsible sections, verify form handler | Done |
+| 4 | Base template (`base.html`) — nav bar, footer, CSS/JS includes, page structure | Done |
+| 5 | Overview page (`dashboard.py` + `overview.html`) — stats cards, recent activity, recent batches | Done |
+| 6 | Agents list page (`agents.html`) — table with entry counts, risk tier dots, last active | Done |
+| 7 | Agent detail page (`agent_detail.html`) — certificate info + full audit trail table with status columns | Done |
+| 8 | Entry detail page (`entry_detail.html`) — entry info, verification panel, Merkle proof path, Bitcoin anchor | Done |
+| 9 | Batches list + batch detail pages (`batches.html`, `batch_detail.html`) | Done |
+| 10 | Verification tool page (`verify.html`) — paste entry ID, verify via fetch, show results | Done |
+| 11 | Mount dashboard routes and static files in existing `app.py` | Done |
+| 12 | Tests (`test_dashboard.py`) — 28 tests: all pages return 200, expected data, empty state, static files, navigation | Done |
+| 13 | README — added dashboard section, updated project structure and test count | Done |
 
 ## Files Created
 
 | File | Description |
 |------|-------------|
-| `src/agentcert/service/__init__.py` | Service package init |
-| `src/agentcert/service/app.py` | FastAPI application with 12 endpoints (~280 lines) |
-| `src/agentcert/service/models.py` | SQLite database layer with CRUD operations (~280 lines) |
-| `src/agentcert/service/scheduler.py` | Background batching + anchoring scheduler (~120 lines) |
-| `src/agentcert/service/config.py` | `ServiceConfig` dataclass (~100 lines) |
-| `src/agentcert/client.py` | `AgentCertClient` SDK client (~260 lines) |
-| `tests/test_service.py` | 40 tests across 9 test classes |
-| `tests/test_client.py` | 19 tests across 11 test classes |
-| `examples/service_demo.py` | Full flow demo: start service, register, submit, batch, proof, verify |
+| `src/agentcert/service/dashboard.py` | Dashboard route handlers, 7 routes, helper functions (~310 lines) |
+| `src/agentcert/service/templates/base.html` | Base template with nav, footer, CSS/JS includes |
+| `src/agentcert/service/templates/overview.html` | Overview page: stats cards, recent activity, recent batches |
+| `src/agentcert/service/templates/agents.html` | Agents list with risk tier dots, entry counts, status badges |
+| `src/agentcert/service/templates/agent_detail.html` | Certificate info + audit trail table with pagination |
+| `src/agentcert/service/templates/entry_detail.html` | Entry info, live verification panel, Merkle proof path, anchor section |
+| `src/agentcert/service/templates/batches.html` | Batches list with anchor status |
+| `src/agentcert/service/templates/batch_detail.html` | Batch info + entries table + anchor link |
+| `src/agentcert/service/templates/verify.html` | Verification tool: paste entry ID, verify via fetch |
+| `src/agentcert/service/static/style.css` | Complete stylesheet (~500 lines) |
+| `src/agentcert/service/static/main.js` | Copy-to-clipboard, auto-refresh, collapsible sections, verify form (~110 lines) |
+| `tests/test_dashboard.py` | 28 tests across 9 test classes |
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| `pyproject.toml` | Added `service`, `client` optional dependency groups; updated `dev` group |
-| `src/agentcert/exceptions.py` | Added `ServiceError`, `ClientError` |
-| `src/agentcert/__init__.py` | Added conditional `AgentCertClient` import, `ServiceError`, `ClientError` exports (69 → 72) |
-| `src/agentcert/cli.py` | Added `service` subcommand group with 4 commands: start, health, stats, force-batch |
-| `README.md` | Added anchoring service + SDK client sections, updated install options, project structure (396 tests, 21 CLI commands) |
+| `pyproject.toml` | Added `jinja2>=3.0.0` to `service` and `dev` dependency groups |
+| `src/agentcert/service/models.py` | Added 9 dashboard query methods: `get_all_certificates`, `get_recent_entries`, `get_recent_batches`, `get_entries_by_cert`, `get_entry_count_by_cert`, `get_entries_by_batch`, `get_all_batches`, `get_last_active_by_cert` |
+| `src/agentcert/service/app.py` | Added `StaticFiles` import, mounted dashboard router and static files |
+| `README.md` | Added web dashboard section, updated project structure (dashboard.py, templates/, static/), updated test count (396 → 424) |
 
 ## Architecture
 
-### Database (models.py)
+### Dashboard Routes (dashboard.py)
 
-SQLite via `sqlite3` standard library. No ORM. 4 tables:
+7 routes under `/dashboard`, using `APIRouter`:
 
-- **certificates** — registered certificates (cert_id PK, certificate_json, registered_at)
-- **entries** — audit entries (entry_id PK, trail_id, cert_id, agent_id, sequence, entry_json, batch_id FK)
-- **batches** — Merkle batches (batch_id PK, merkle_root, item_count, item_hashes_json, anchor_receipt_json)
-- **proofs** — Merkle proofs (entry_id + batch_id composite PK, proof_json)
+| Route | Page | Description |
+|-------|------|-------------|
+| `GET /dashboard` | Overview | Stats cards, recent 10 entries, recent 5 batches |
+| `GET /dashboard/agents` | Agents List | All certs with entry count, risk tier, last active, status |
+| `GET /dashboard/agents/{cert_id}` | Agent Detail | Certificate info + paginated audit trail (50/page) |
+| `GET /dashboard/entries/{entry_id}` | Entry Detail | Entry info, live verification, Merkle proof path, anchor |
+| `GET /dashboard/batches` | Batches List | All batches with anchor status |
+| `GET /dashboard/batches/{batch_id}` | Batch Detail | Batch info + entries in batch |
+| `GET /dashboard/verify` | Verify Tool | Form to paste entry ID, verify via fetch |
 
-Indexes on trail_id, cert_id, batch_id for entries.
+Helper functions: `_action_label()` (action type icons), `_time_ago()` (relative time), `_format_ts()` (UTC timestamp), `_db()` (get DB from app state), `_ctx()` (build template context).
 
-### Service (app.py)
+### Templates (Jinja2)
 
-FastAPI application with 12 endpoints:
+- `base.html` — Shared layout: nav bar (Overview, Agents, Batches, Verify + health dot), footer, CSS/JS includes
+- `overview.html` — 5 stat cards, recent activity table, recent batches table, auto-refresh every 30s
+- `agents.html` — Agent table with risk tier dots (filled/empty), status badges
+- `agent_detail.html` — Detail grid for cert fields, capability/constraint tags, paginated audit trail with Signed/Batched/Anchored columns
+- `entry_detail.html` — Detail grid, live verification via fetch, Merkle proof tree visualization, Bitcoin anchor with explorer link
+- `batches.html` / `batch_detail.html` — Batch tables with anchor status, entries list
+- `verify.html` — Form + JS-driven verification
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/certificates` | POST | Register certificate (validates cert_id + creator signature) |
-| `/api/v1/certificates/{id}` | GET | Get certificate |
-| `/api/v1/entries` | POST | Submit entries (validates entry_id + agent signature + cert binding) |
-| `/api/v1/entries/{id}` | GET | Get entry |
-| `/api/v1/trails/{id}` | GET | Get trail entries |
-| `/api/v1/proofs/{id}` | GET | Get Merkle proof (or "pending" status) |
-| `/api/v1/verify/{id}` | GET | Full verification (5 checks: integrity, signature, cert binding, proof, anchor) |
-| `/api/v1/batches/{id}` | GET | Get batch |
-| `/api/v1/batches/latest` | GET | Latest batch |
-| `/api/v1/admin/force-batch` | POST | Force immediate batch cycle |
-| `/api/v1/health` | GET | Health check |
-| `/api/v1/stats` | GET | Statistics |
+### Static Assets
 
-Entry validation on submission:
-1. Parse entry dict to `AuditEntry`
-2. Verify `entry_id` integrity (SHA-256 of body)
-3. Verify agent signature (ECDSA)
-4. Check `cert_id` references a registered certificate
-5. Check `agent_id` matches the certificate
+- `style.css` — CSS custom properties for theming, system font stack, card layout, tables with striping, status badges (green/amber/red), risk tier dots, hash truncation with ellipsis, copy buttons, proof path styling, responsive breakpoint at 768px
+- `main.js` — Copy-to-clipboard with "Copied!" feedback, auto-refresh (30s), collapsible sections, verify form handler with `renderVerificationResult()`, HTML escaping
 
-### Scheduler (scheduler.py)
+### Database Queries Added to models.py
 
-`BatchScheduler` runs as an asyncio background task:
-1. Queries unbatched entries
-2. If count >= `batch_min_entries`: builds Merkle tree, stores batch + proofs, marks entries batched
-3. If wallet key configured: anchors to Bitcoin
-4. Logs the result
-
-### Client (client.py)
-
-`AgentCertClient` — httpx-based sync client with 14 methods:
-
-- `register_certificate(cert)`, `get_certificate(cert_id)`
-- `submit_entries(entries)`, `submit_trail(trail)`, `get_entry(entry_id)`
-- `get_trail(trail_id)`
-- `get_proof(entry_id)` → `MerkleProof | None`, `get_proof_raw(entry_id)`
-- `verify_entry(entry_id)`
-- `get_batch(batch_id)`, `get_latest_batch()`, `force_batch()`
-- `health()`, `stats()`
-
-Context manager support (`with AgentCertClient(...) as client:`).
-
-### Config (config.py)
-
-`ServiceConfig` dataclass with defaults:
-- `db_path`: `"./agentcert-service/agentcert.db"`
-- `batch_interval_seconds`: 600 (10 minutes)
-- `batch_min_entries`: 1
-- `batch_max_entries`: 10000
-- `network`: `"testnet"`
-- `anchor_wallet_key`: None (skip anchoring)
-- `host`: `"0.0.0.0"`, `port`: 8932
-
-Loadable from environment variables (`AGENTCERT_*`) or JSON file.
+| Method | Description |
+|--------|-------------|
+| `get_all_certificates()` | All certs, newest first, with `_registered_at` |
+| `get_recent_entries(limit)` | Latest entries across all agents, with `_batch_id` |
+| `get_recent_batches(limit)` | Latest batches |
+| `get_entries_by_cert(cert_id, offset, limit)` | Entries for a cert, newest first, with `_batch_id` |
+| `get_entry_count_by_cert(cert_id)` | Entry count for a cert |
+| `get_entries_by_batch(batch_id)` | All entries in a batch |
+| `get_all_batches()` | All batches, newest first |
+| `get_last_active_by_cert(cert_id)` | Most recent entry timestamp for a cert |
 
 ## Test Count
 
 | | Before | After | Delta |
 |-|--------|-------|-------|
-| Tests | 337 | 396 | +59 |
+| Tests | 396 | 424 | +28 |
 
-### test_service.py (40 tests)
-
-| Test class | Count | Covers |
-|------------|-------|--------|
-| `TestHealth` | 2 | Health endpoint, empty stats |
-| `TestCertificates` | 7 | Register, duplicate (409), invalid cert_id, invalid sig, missing field, get, not found |
-| `TestEntries` | 8 | Submit, duplicate, invalid sig, unregistered cert, wrong agent, missing field, get, not found |
-| `TestTrails` | 2 | Get trail, not found |
-| `TestProofs` | 3 | Pending, after batch, not found |
-| `TestVerify` | 3 | Pending, after batch, not found |
-| `TestBatches` | 6 | Force batch (empty, with entries), get batch, not found, latest, latest empty |
-| `TestFullFlow` | 1 | Register → submit → batch → proof → verify (full integration) |
-| `TestConfig` | 3 | Default, from_env, from_file |
-| `TestDatabase` | 5 | Register+get cert, get not found, store+get entries, unbatched entries, stats |
-
-### test_client.py (19 tests)
+### test_dashboard.py (28 tests)
 
 | Test class | Count | Covers |
 |------------|-------|--------|
-| `TestRegisterCertificate` | 2 | Success, conflict (409) |
-| `TestSubmitEntries` | 2 | Submit entries, submit trail |
-| `TestGetProof` | 3 | Pending, available (returns MerkleProof), raw |
-| `TestVerifyEntry` | 1 | Full verification response |
-| `TestGetBatch` | 2 | Get batch, get latest |
-| `TestForceBatch` | 1 | Force batch |
-| `TestHealthAndStats` | 2 | Health, stats |
-| `TestErrorHandling` | 2 | 404 → ClientError, connection error → ClientError |
-| `TestContextManager` | 1 | With-statement |
-| `TestGetCertificate` | 1 | Get certificate |
-| `TestGetEntry` | 1 | Get entry |
-| `TestGetTrail` | 1 | Get trail |
-
-## API Exports (72 total, +3 new)
-
-### New exports
-
-**Classes (1):**
-- `AgentCertClient` — SDK client for the anchoring service (conditional on httpx)
-
-**Exceptions (2):**
-- `ServiceError` — raised by the service on internal errors
-- `ClientError` — raised by the SDK client on communication errors
-
-## CLI Commands (4 new, 21 total)
-
-```bash
-agentcert service start [--config config.json] [--port 8932] [--network testnet] [--wallet-key key.json]
-agentcert service health [--url http://localhost:8932]
-agentcert service stats [--url http://localhost:8932]
-agentcert service force-batch [--url http://localhost:8932]
-```
+| `TestEmptyState` | 4 | Overview, agents, batches, verify — all empty |
+| `TestOverview` | 2 | With data (agent name, entries), stats cards |
+| `TestAgents` | 3 | List, detail, not found (404) |
+| `TestEntryDetail` | 3 | Detail with data, proof present, not found |
+| `TestBatches` | 3 | List, detail, not found |
+| `TestStaticFiles` | 2 | CSS served, JS served |
+| `TestNavigation` | 2 | Nav links present, agent links to entries |
+| `TestDashboardQueries` | 9 | All 9 new DB methods |
 
 ## Dependencies
 
 | Package | Group | Purpose |
 |---------|-------|---------|
-| `fastapi>=0.100.0` | service | REST API framework |
-| `uvicorn>=0.20.0` | service | ASGI server |
-| `httpx>=0.24.0` | client | HTTP client for SDK |
+| `jinja2>=3.0.0` | service | Template rendering |
 
-All optional — install with `pip install agentcert[service]` or `pip install agentcert[client]`.
+Added to both `service` and `dev` optional dependency groups.
 
 ## Open Items
 
-- **PyPI re-publish**: Package on PyPI is v0.2.0. A version bump and re-publish is needed for the service/client additions.
-- **Authentication**: The service has no auth. A future phase could add API key or JWT authentication.
-- **Rate limiting**: No rate limiting on endpoints.
-- **Async database**: SQLite via sqlite3 is synchronous, wrapped in `asyncio.to_thread` for the scheduler. A future phase could use `aiosqlite`.
-- **PostgreSQL**: SQLite is fine for single-instance deployment. For production scale, a PostgreSQL adapter would be needed.
-- **Docker**: No Dockerfile yet. Would simplify deployment.
-- **GitHub Actions CI**: No CI pipeline yet.
+- **Dark mode**: CSS custom properties are in place for easy theming. A dark mode toggle could be added with minimal effort.
+- **Sorting**: Agent/batch tables don't have client-side column sorting yet. Could add with minimal JS.
+- **Search**: No global search across entries/agents. Would be useful for large deployments.
+- **Real-time updates**: Overview auto-refreshes every 30s via full page reload. WebSocket/SSE could provide live updates.
+- **Export**: No CSV/JSON export from the dashboard. Would help compliance workflows.
+- **Authentication**: Dashboard has no auth (same as the API). A future phase could gate access.

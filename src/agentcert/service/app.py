@@ -9,10 +9,12 @@ from __future__ import annotations
 import hashlib
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 import agentcert
 from agentcert.audit_verify import verify_audit_entry as _verify_audit_entry
@@ -390,5 +392,13 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     async def stats() -> dict[str, Any]:
         """Service statistics."""
         return db.get_stats()
+
+    # ── Dashboard (HTML) ─────────────────────────────────────────────
+
+    from agentcert.service.dashboard import dashboard_router
+
+    static_dir = Path(__file__).parent / "static"
+    app.mount("/dashboard/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.include_router(dashboard_router)
 
     return app
