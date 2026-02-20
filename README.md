@@ -1,12 +1,20 @@
 # AgentCert
 
-Bitcoin-anchored identity certificates for AI agents.
+[![PyPI](https://img.shields.io/pypi/v/agentcert)](https://pypi.org/project/agentcert/)
+[![Python](https://img.shields.io/pypi/pyversions/agentcert)](https://pypi.org/project/agentcert/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-424%20passing-brightgreen)]()
 
-AgentCert is the open-source Python implementation of **AIT-1** (Agent Identity Certificates) from the Agent Internet Trust protocol. It lets developers create cryptographically signed, Bitcoin-anchored identity certificates that bind a **creator** (human or company) to an **agent** (autonomous software) — with verifiable metadata, capabilities, constraints, and a risk tier.
+**Verifiable identity and tamper-proof audit trails for AI agents. Anchored to Bitcoin.**
 
-Every certificate is signed with ECDSA/secp256k1, hashed with SHA-256, and optionally anchored to Bitcoin via OP_RETURN. Any third party can verify the certificate using only math and the blockchain.
+Your AI agents make decisions, access data, and execute transactions autonomously. AgentCert gives each agent a cryptographic identity certificate — proving who created it, what it's authorized to do, and creating an immutable record of every action it takes.
 
-**Proven on Bitcoin testnet:** [`6b3b8cd6...`](https://blockstream.info/testnet/tx/6b3b8cd6624d833e98add57823a7a8ba72134a9de4aae6b7eb7617ebd7cb771c)
+- **Identity Certificates** — Bind a creator (human or company) to an agent with signed, verifiable metadata: capabilities, constraints, risk tier, expiry
+- **Audit Trails** — Every agent action is cryptographically signed and hash-chained. Tamper with one entry, the entire chain breaks
+- **Bitcoin Anchoring** — Certificate and audit hashes are written to Bitcoin via OP_RETURN. Any third party can verify using only math and the blockchain. No central authority
+- **LangChain Integration** — Add identity + audit trails to any LangChain agent with 3 lines of code
+
+**424 tests passing. v0.3.0 on PyPI. Proven on Bitcoin testnet:** [`6b3b8cd6...`](https://blockstream.info/testnet/tx/6b3b8cd6624d833e98add57823a7a8ba72134a9de4aae6b7eb7617ebd7cb771c)
 
 ## Install
 
