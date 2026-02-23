@@ -42,3 +42,8 @@ CLAUDE.md
 # Demo/test artifacts
 demo-*/
 demo-*.json
+
+# Demo keys, secrets, and output (never commit private keys)
+demo/keys/
+demo/.env
+demo/output/
