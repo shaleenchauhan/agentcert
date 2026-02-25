@@ -12,6 +12,7 @@
         <ul class="nav-links">
             <li><a href="/dashboard" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a></li>
             <li><a href="/dashboard/agents" class="{{ 'active' if active_page == 'agents' else '' }}">Agents</a></li>
+            <li><a href="/dashboard/entries" class="{{ 'active' if active_page == 'entries' else '' }}">Entries</a></li>
             <li><a href="/dashboard/batches" class="{{ 'active' if active_page == 'batches' else '' }}">Batches</a></li>
             <li><a href="/dashboard/verify" class="{{ 'active' if active_page == 'verify' else '' }}">Verify</a></li>
         </ul>
@@ -22,6 +23,18 @@
     </nav>
 
     <div class="container">
+        {% if explainer_text %}
+        <div class="explainer-wrapper">
+            <button class="explainer-btn" id="explainer-toggle" aria-expanded="false" aria-controls="explainer-panel">? What am I looking at?</button>
+            <div class="explainer-panel" id="explainer-panel" hidden>
+                <div class="explainer-body">
+                    <p>{{ explainer_text }}</p>
+                </div>
+                <button class="explainer-dismiss" id="explainer-dismiss">Got it</button>
+            </div>
+        </div>
+        {% endif %}
+
         {% block content %}{% endblock %}
     </div>
 

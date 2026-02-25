@@ -23,6 +23,81 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 dashboard_router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
 
+# ── Explainer Texts ─────────────────────────────────────────────────────────
+
+_EXPLAINER = {
+    "overview": (
+        "The cards at the top show how many AI agents are registered, how many actions "
+        "have been audited, how many Merkle batches have been created, and when the last "
+        "batch was anchored to Bitcoin. Below, Recent Activity shows the latest actions "
+        "across all agents \u2014 each one is cryptographically signed and tamper-proof. "
+        "Recent Batches shows groups of entries that have been anchored to the Bitcoin "
+        "blockchain together."
+    ),
+    "agents": (
+        "Each row is a registered AI agent. The name links to its full certificate and "
+        "audit trail. Platform shows which framework it runs on. Risk Tier indicates the "
+        "agent\u2019s authorization level \u2014 more dots means higher risk. Entries counts "
+        "how many audited actions that agent has performed. All entries are "
+        "cryptographically signed and anchored to Bitcoin."
+    ),
+    "agent_detail": (
+        "At the top is this agent\u2019s identity certificate \u2014 who created it, what "
+        "it\u2019s allowed to do (capabilities), what it\u2019s restricted from (constraints), "
+        "and its risk tier. Below is the complete audit trail: every action this agent "
+        "took, in order. Signed = the agent cryptographically signed this entry. "
+        "Batched = it\u2019s included in a Merkle tree. Anchored = that tree is recorded "
+        "on the Bitcoin blockchain. Click any entry to see full verification."
+    ),
+    "entry_detail": (
+        "This is a single action taken by an AI agent. Entry Information shows what "
+        "happened \u2014 the action type, a summary, timestamp, and the agent\u2019s "
+        "cryptographic signature. Verification runs five independent checks: the "
+        "content hasn\u2019t been tampered with (integrity), the agent actually signed it "
+        "(signature), the agent\u2019s certificate is valid (binding), it\u2019s in a Merkle "
+        "batch (proof), and that batch is on the Bitcoin blockchain (anchor). "
+        "All green = verified and permanent. Below that, Merkle Proof shows this "
+        "entry\u2019s position in the batch \u2014 the leaf hash and the sibling hashes that "
+        "form a path up to the Merkle root. Bitcoin Anchor shows the on-chain "
+        "transaction where that root was recorded \u2014 the txid, block height, and "
+        "confirmations. To verify the anchor yourself: copy the Merkle Root shown on "
+        "this page, click \u2018View on Blockchain\u2019 to open Blockstream Explorer, click "
+        "\u2018Details\u2019 on the transaction, and confirm the Merkle Root matches the "
+        "content inside the OP_RETURN output."
+    ),
+    "entries": (
+        "Every row is an audited action taken by an AI agent \u2014 cryptographically signed "
+        "and anchored to Bitcoin. Use the dropdown to filter by agent. Click any summary "
+        "to see full verification details for that entry, or click the agent name to see "
+        "its certificate and complete audit trail."
+    ),
+    "batches": (
+        "Each row is a Merkle batch \u2014 a group of audit entries combined into a single "
+        "cryptographic tree. The Merkle Root is the tree\u2019s fingerprint. When it says "
+        "\u2018Anchored\u2019, that root hash has been written to the Bitcoin blockchain, making "
+        "every entry in the batch permanently verifiable. One Bitcoin transaction secures "
+        "all entries in the batch."
+    ),
+    "batch_detail": (
+        "This batch combined the listed entries into a single Merkle tree. The Merkle "
+        "Root is the tree\u2019s fingerprint \u2014 it\u2019s been written to the Bitcoin blockchain "
+        "in the transaction shown. Click any entry to see its individual verification "
+        "and its path through the Merkle tree to this root."
+    ),
+    "verify": (
+        "Paste any entry ID (the SHA-256 hex string from an entry detail page) and hit "
+        "Verify. This runs five verification checks on the entry. To complete all five, "
+        "the system needs: the full entry content (to recompute the hash and check "
+        "integrity), the agent\u2019s public key (to verify the signature), the agent\u2019s "
+        "certificate (to confirm binding), the Merkle proof \u2014 the leaf hash and sibling "
+        "path (to recompute the Merkle root), and the Bitcoin transaction ID (to look up "
+        "the OP_RETURN on-chain and confirm the root matches). Currently all of this data "
+        "is served by AgentCert \u2014 but every check is cryptographic, so AgentCert "
+        "can\u2019t forge it. If any entry, signature, or proof were altered, verification "
+        "would fail. The Bitcoin anchor is independently checkable on any block explorer."
+    ),
+}
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 ACTION_TYPE_LABELS = {
@@ -106,6 +181,7 @@ async def overview(request: Request):
     return templates.TemplateResponse(request, "overview.html", _ctx(
         request,
         active_page="overview",
+        explainer_text=_EXPLAINER["overview"],
         stats=stats,
         recent_entries=recent_entries,
         recent_batches=recent_batches,
@@ -141,6 +217,7 @@ async def agents_list(request: Request):
     return templates.TemplateResponse(request, "agents.html", _ctx(
         request,
         active_page="agents",
+        explainer_text=_EXPLAINER["agents"],
         agents=agents,
     ))
 
@@ -181,6 +258,7 @@ async def agent_detail(request: Request, cert_id: str):
     return templates.TemplateResponse(request, "agent_detail.html", _ctx(
         request,
         active_page="agents",
+        explainer_text=_EXPLAINER["agent_detail"],
         cert=cert,
         meta=meta,
         expired=expired,
@@ -188,6 +266,44 @@ async def agent_detail(request: Request, cert_id: str):
         total_entries=total_entries,
         page=page,
         total_pages=total_pages,
+    ))
+
+
+@dashboard_router.get("/entries")
+async def entries_list(request: Request):
+    """All entries page with optional agent and status filters."""
+    db = _db(request)
+    filter_cert = request.query_params.get("agent", "")
+    filter_status = request.query_params.get("status", "")
+
+    entries = db.get_all_entries(
+        cert_id=filter_cert or None,
+        status=filter_status or None,
+    )
+
+    # Build agent list for the filter dropdown
+    certs = db.get_all_certificates()
+    agents = []
+    for cert in certs:
+        meta = cert.get("agent_metadata", {})
+        agents.append({
+            "cert_id": cert["cert_id"],
+            "name": meta.get("name", "Unknown"),
+        })
+
+    # Enrich entries with agent name
+    cert_cache: dict[str, str] = {a["cert_id"]: a["name"] for a in agents}
+    for entry in entries:
+        entry["_agent_name"] = cert_cache.get(entry.get("cert_id", ""), "Unknown")
+
+    return templates.TemplateResponse(request, "entries.html", _ctx(
+        request,
+        active_page="entries",
+        explainer_text=_EXPLAINER["entries"],
+        entries=entries,
+        agents=agents,
+        filter_cert=filter_cert,
+        filter_status=filter_status,
     ))
 
 
@@ -234,6 +350,7 @@ async def entry_detail(request: Request, entry_id: str):
     return templates.TemplateResponse(request, "entry_detail.html", _ctx(
         request,
         active_page="",
+        explainer_text=_EXPLAINER["entry_detail"],
         entry=entry,
         agent_name=agent_name,
         cert=cert,
@@ -252,6 +369,7 @@ async def batches_list(request: Request):
     return templates.TemplateResponse(request, "batches.html", _ctx(
         request,
         active_page="batches",
+        explainer_text=_EXPLAINER["batches"],
         batches=batches,
     ))
 
@@ -295,6 +413,7 @@ async def batch_detail(request: Request, batch_id: str):
     return templates.TemplateResponse(request, "batch_detail.html", _ctx(
         request,
         active_page="batches",
+        explainer_text=_EXPLAINER["batch_detail"],
         batch=batch,
         entries=entries,
         anchor=anchor,
@@ -307,4 +426,5 @@ async def verify_page(request: Request):
     return templates.TemplateResponse(request, "verify.html", _ctx(
         request,
         active_page="verify",
+        explainer_text=_EXPLAINER["verify"],
     ))

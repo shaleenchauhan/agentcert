@@ -282,9 +282,22 @@ def _build_segwit_tx(
     preimage += struct.pack("<I", 0)                   # nLocktime
     preimage += struct.pack("<I", _SIGHASH_ALL)        # sighash type
 
-    # Sign
+    # Sign (with BIP-62 low-S normalization)
     sighash = hashlib.sha256(hashlib.sha256(preimage).digest()).digest()
     sig_der = private_key.sign(sighash, ec.ECDSA(Prehashed(hashes.SHA256())))
+
+    # Enforce low-S per BIP-62: if S > N/2, replace with N - S
+    from cryptography.hazmat.primitives.asymmetric.utils import (
+        decode_dss_signature,
+        encode_dss_signature,
+    )
+
+    _SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    r, s = decode_dss_signature(sig_der)
+    if s > _SECP256K1_N // 2:
+        s = _SECP256K1_N - s
+    sig_der = encode_dss_signature(r, s)
+
     sig_with_hashtype = sig_der + bytes([_SIGHASH_ALL])
 
     # Build the witness

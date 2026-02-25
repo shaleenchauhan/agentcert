@@ -30,6 +30,31 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 30000);
     }
 
+    /* ── Explainer Toggle ──────────────────────────────────────────── */
+
+    var explainerToggle = document.getElementById("explainer-toggle");
+    var explainerPanel = document.getElementById("explainer-panel");
+    var explainerDismiss = document.getElementById("explainer-dismiss");
+
+    function closeExplainer() {
+        if (explainerPanel) {
+            explainerPanel.hidden = true;
+            explainerToggle.setAttribute("aria-expanded", "false");
+        }
+    }
+
+    if (explainerToggle && explainerPanel) {
+        explainerToggle.addEventListener("click", function () {
+            var open = explainerPanel.hidden;
+            explainerPanel.hidden = !open;
+            explainerToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+    }
+
+    if (explainerDismiss) {
+        explainerDismiss.addEventListener("click", closeExplainer);
+    }
+
     /* ── Collapsible Sections ──────────────────────────────────────── */
 
     document.querySelectorAll(".collapsible-toggle").forEach(function (el) {

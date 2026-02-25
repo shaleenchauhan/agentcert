@@ -185,6 +185,19 @@ a:hover {
     margin-top: 2px;
 }
 
+a.stat-card-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+a.stat-card-link:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.12);
+    transform: translateY(-2px);
+}
+
 /* ── Cards / Sections ──────────────────────────────────────────────── */
 
 .card {
@@ -214,6 +227,43 @@ a:hover {
 
 .card-body-flush {
     padding: 0;
+}
+
+/* ── Filter Bar ────────────────────────────────────────────────────── */
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.filter-bar label {
+    font-weight: 600;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.filter-bar select {
+    padding: 5px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md, 6px);
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.filter-bar select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.filter-count {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-left: 4px;
 }
 
 /* ── Tables ────────────────────────────────────────────────────────── */
@@ -654,6 +704,81 @@ table tr:hover {
 
 .empty-state p {
     font-size: 14px;
+}
+
+/* ── Explainer Panel ──────────────────────────────────────────────── */
+
+.explainer-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-bottom: 4px;
+}
+
+.explainer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: rgba(37, 99, 235, 0.06);
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    line-height: 1.6;
+}
+
+.explainer-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.explainer-btn[aria-expanded="true"] {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.explainer-panel {
+    margin-top: 8px;
+    width: 100%;
+    max-width: 640px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+    overflow: hidden;
+}
+
+.explainer-body {
+    padding: 16px 20px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+}
+
+.explainer-body p {
+    margin: 0;
+}
+
+.explainer-dismiss {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: rgba(37, 99, 235, 0.04);
+    border: none;
+    border-top: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.explainer-dismiss:hover {
+    background: rgba(37, 99, 235, 0.08);
 }
 
 /* ── Footer ────────────────────────────────────────────────────────── */

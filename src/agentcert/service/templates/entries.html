@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Entries{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Entries</h1>
+    <p>All audit entries across all agents</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <label for="agent-filter">Agent:</label>
+            <select id="agent-filter" onchange="applyFilters()">
+                <option value="">All agents</option>
+                {% for agent in agents %}
+                <option value="{{ agent.cert_id }}" {{ 'selected' if filter_cert == agent.cert_id else '' }}>{{ agent.name }}</option>
+                {% endfor %}
+            </select>
+            <label for="status-filter">Status:</label>
+            <select id="status-filter" onchange="applyFilters()">
+                <option value="" {{ 'selected' if not filter_status else '' }}>All</option>
+                <option value="pending" {{ 'selected' if filter_status == 'pending' else '' }}>Pending</option>
+                <option value="batched" {{ 'selected' if filter_status == 'batched' else '' }}>Batched</option>
+                <option value="anchored" {{ 'selected' if filter_status == 'anchored' else '' }}>Anchored</option>
+            </select>
+            <span class="filter-count">{{ entries|length }} entries</span>
+        </div>
+    </div>
+    {% if entries %}
+    <div class="card-body-flush table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Agent</th>
+                    <th>Type</th>
+                    <th>Summary</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr>
+                    <td>{{ time_ago(entry.timestamp) }}</td>
+                    <td>
+                        <a href="/dashboard/agents/{{ entry.cert_id }}">{{ entry._agent_name }}</a>
+                    </td>
+                    <td>{{ action_label(entry.action_type) }}</td>
+                    <td>
+                        <a href="/dashboard/entries/{{ entry.entry_id }}">{{ entry.action_summary }}</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body">
+        <div class="empty-state">
+            {% if filter_status == 'pending' %}
+            <p>No pending entries — all entries have been batched and anchored.</p>
+            {% elif filter_status == 'batched' %}
+            <p>No batched-only entries found.</p>
+            {% elif filter_status == 'anchored' %}
+            <p>No anchored entries found.</p>
+            {% else %}
+            <p>No entries yet. Register a certificate and submit entries to get started.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function applyFilters() {
+    var agent = document.getElementById('agent-filter').value;
+    var status = document.getElementById('status-filter').value;
+    var params = [];
+    if (agent) params.push('agent=' + encodeURIComponent(agent));
+    if (status) params.push('status=' + encodeURIComponent(status));
+    location.href = '/dashboard/entries' + (params.length ? '?' + params.join('&') : '');
+}
+</script>
+{% endblock %}

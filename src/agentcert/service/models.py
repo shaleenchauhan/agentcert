@@ -370,23 +370,96 @@ class Database:
         return results
 
     def get_recent_entries(self, limit: int = 10) -> list[dict[str, Any]]:
-        """Get the most recent entries across all agents.
+        """Get recent entries with agent diversity via round-robin.
+
+        Fetches the most recent entries per agent, then interleaves them
+        so the result cycles through agents evenly.
 
         Args:
             limit: Maximum number of entries to return.
 
         Returns:
-            List of entry dicts, newest first.
+            List of entry dicts, round-robin ordered by agent.
         """
-        rows = self._conn.execute(
-            "SELECT entry_json, batch_id FROM entries "
-            "ORDER BY received_at DESC LIMIT ?",
-            (limit,),
+        # Get distinct cert_ids ordered by most recent activity
+        agent_rows = self._conn.execute(
+            "SELECT cert_id, MAX(received_at) AS max_ra "
+            "FROM entries GROUP BY cert_id ORDER BY max_ra DESC",
         ).fetchall()
+
+        # For each agent, fetch its most recent entries (enough to fill limit)
+        per_agent: list[list[dict[str, Any]]] = []
+        per_agent_depth = max(1, (limit + len(agent_rows) - 1) // len(agent_rows)) if agent_rows else 0
+        for row in agent_rows:
+            cert_id = row["cert_id"]
+            entry_rows = self._conn.execute(
+                "SELECT entry_json, batch_id FROM entries "
+                "WHERE cert_id = ? ORDER BY sequence DESC LIMIT ?",
+                (cert_id, per_agent_depth),
+            ).fetchall()
+            queue: list[dict[str, Any]] = []
+            for er in entry_rows:
+                entry = json.loads(er["entry_json"])
+                entry["_batch_id"] = er["batch_id"]
+                queue.append(entry)
+            per_agent.append(queue)
+
+        # Round-robin interleave
+        results: list[dict[str, Any]] = []
+        depth = 0
+        while len(results) < limit:
+            added = False
+            for queue in per_agent:
+                if depth < len(queue):
+                    results.append(queue[depth])
+                    added = True
+                    if len(results) >= limit:
+                        break
+            if not added:
+                break
+            depth += 1
+
+        return results
+
+    def get_all_entries(
+        self, cert_id: str | None = None, status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get all entries, optionally filtered, newest first.
+
+        Args:
+            cert_id: If given, only return entries for this certificate.
+            status: If given, filter by status: "pending" (unbatched),
+                "batched" (batched but not anchored), or "anchored".
+
+        Returns:
+            List of entry dicts with _batch_id and _anchored attached.
+        """
+        query = (
+            "SELECT e.entry_json, e.batch_id, b.anchor_receipt_json "
+            "FROM entries e "
+            "LEFT JOIN batches b ON e.batch_id = b.batch_id"
+        )
+        conditions: list[str] = []
+        params: list[Any] = []
+        if cert_id:
+            conditions.append("e.cert_id = ?")
+            params.append(cert_id)
+        if status == "pending":
+            conditions.append("e.batch_id IS NULL")
+        elif status == "batched":
+            conditions.append("e.batch_id IS NOT NULL AND b.anchor_receipt_json IS NULL")
+        elif status == "anchored":
+            conditions.append("e.batch_id IS NOT NULL AND b.anchor_receipt_json IS NOT NULL")
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY e.received_at DESC"
+
+        rows = self._conn.execute(query, params).fetchall()
         results = []
         for row in rows:
             entry = json.loads(row["entry_json"])
             entry["_batch_id"] = row["batch_id"]
+            entry["_anchored"] = row["anchor_receipt_json"] is not None
             results.append(entry)
         return results
 
