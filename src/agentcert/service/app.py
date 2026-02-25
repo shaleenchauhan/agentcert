@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import agentcert
@@ -65,6 +65,12 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     app.state.db = db
     app.state.config = config
     app.state.scheduler = scheduler
+
+    # ── Root Redirect ────────────────────────────────────────────────────
+
+    @app.get("/")
+    async def root():
+        return RedirectResponse(url="/dashboard/")
 
     # ── Certificate Endpoints ───────────────────────────────────────────
 
@@ -365,6 +371,62 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             "merkle_root": batch.merkle_root,
             "item_count": batch.item_count,
             "anchored": batch.anchor_receipt is not None,
+        }
+
+    @app.post("/api/v1/admin/import-batch")
+    async def import_batch(request: Request) -> dict[str, Any]:
+        """Import a pre-anchored batch with Merkle proofs.
+
+        Accepts a batch dict (with anchor_receipt) and a proofs dict
+        (entry_id → proof), stores the batch, marks entries as batched,
+        and stores all proofs.
+        """
+        body = await request.json()
+        batch_dict = body.get("batch")
+        proofs_dict = body.get("proofs")
+
+        if not batch_dict:
+            raise HTTPException(status_code=400, detail="Missing 'batch' field")
+        if not proofs_dict or not isinstance(proofs_dict, dict):
+            raise HTTPException(status_code=400, detail="Missing or invalid 'proofs' field")
+
+        batch_id = batch_dict["batch_id"]
+        item_hashes = batch_dict.get("item_hashes", [])
+
+        # Store batch (skip if already exists)
+        try:
+            db.store_batch(batch_dict)
+        except Exception:
+            # Already exists — update anchor if needed
+            existing = db.get_batch(batch_id)
+            if existing and not existing.get("anchor_receipt") and batch_dict.get("anchor_receipt"):
+                db.update_batch_anchor(batch_id, batch_dict["anchor_receipt"])
+
+        # Mark entries as batched
+        entries_marked = 0
+        for entry_id in item_hashes:
+            try:
+                db.mark_entries_batched([entry_id], batch_id)
+                entries_marked += 1
+            except Exception:
+                continue
+
+        # Store proofs
+        proof_records = []
+        for entry_id, proof_data in proofs_dict.items():
+            proof_records.append({
+                "entry_id": entry_id,
+                "batch_id": batch_id,
+                "proof": proof_data,
+            })
+        db.store_proofs(proof_records)
+
+        return {
+            "status": "imported",
+            "batch_id": batch_id,
+            "merkle_root": batch_dict.get("merkle_root"),
+            "entries_marked": entries_marked,
+            "proofs_stored": len(proof_records),
         }
 
     # ── Health / Stats ──────────────────────────────────────────────────
