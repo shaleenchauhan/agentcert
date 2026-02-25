@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentCert — Trust Infrastructure for AI Agents</title>
+    <meta name="description" content="Give your AI agents verifiable identity and tamper-proof audit trails. Open protocol. Managed service. Bitcoin-anchored.">
+    <meta property="og:title" content="AgentCert — Trust Infrastructure for AI Agents">
+    <meta property="og:description" content="Give your AI agents verifiable identity and tamper-proof audit trails. Open protocol. Managed service. Bitcoin-anchored.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agentcert.dev">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0b0f;
+            --bg-secondary: #12131a;
+            --bg-tertiary: #1a1b26;
+            --bg-card: #161722;
+            --border: #2a2b3a;
+            --border-accent: #3a3b4a;
+            --text-primary: #e8e9ed;
+            --text-secondary: #9496a8;
+            --text-muted: #6b6d7f;
+            --accent: #f7931a;
+            --accent-dim: rgba(247, 147, 26, 0.12);
+            --green: #34d399;
+            --green-dim: rgba(52, 211, 153, 0.12);
+            --red: #f87171;
+            --blue: #60a5fa;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'DM Sans', -apple-system, sans-serif;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.65;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* === NAV === */
+        nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1rem 2rem; background: rgba(10,11,15,0.85); backdrop-filter: blur(16px); border-bottom: 1px solid transparent; transition: border-color 0.3s; }
+        nav.scrolled { border-bottom-color: var(--border); }
+        .nav-inner { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .nav-brand { font-family: var(--mono); font-weight: 600; font-size: 1.15rem; color: var(--text-primary); text-decoration: none; letter-spacing: -0.02em; }
+        .nav-brand span { color: var(--accent); }
+        .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 0.88rem; font-weight: 500; transition: color 0.2s; }
+        .nav-links a:hover { color: var(--text-primary); }
+        .nav-cta { font-family: var(--mono) !important; font-size: 0.82rem !important; color: var(--accent) !important; border: 1px solid rgba(247,147,26,0.35); padding: 0.45rem 1rem; border-radius: 6px; transition: all 0.2s; }
+        .nav-cta:hover { background: var(--accent-dim); border-color: var(--accent); }
+
+        /* === HERO === */
+        .hero { position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 8rem 2rem 6rem; overflow: hidden; }
+        .hero-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(247,147,26,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(247,147,26,0.03) 1px, transparent 1px); background-size: 60px 60px; mask-image: radial-gradient(ellipse at 50% 40%, black 20%, transparent 70%); }
+        .hero-glow { position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 900px; height: 600px; background: radial-gradient(ellipse, rgba(247,147,26,0.06) 0%, transparent 65%); pointer-events: none; }
+        .hero-content { position: relative; max-width: 780px; text-align: center; }
+        .hero-badge { display: inline-flex; align-items: center; gap: 0.6rem; font-family: var(--mono); font-size: 0.78rem; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); padding: 0.4rem 1.1rem; border-radius: 100px; margin-bottom: 2rem; animation: fadeUp 0.8s ease both; }
+        .hero-badge-sep { color: var(--border-accent); }
+        .hero h1 { font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.035em; margin-bottom: 1.5rem; animation: fadeUp 0.8s ease 0.1s both; }
+        .hero h1 em { font-style: normal; color: var(--accent); }
+        .hero-sub { font-size: 1.15rem; color: var(--text-secondary); max-width: 580px; margin: 0 auto 2.5rem; font-weight: 300; line-height: 1.75; animation: fadeUp 0.8s ease 0.2s both; }
+        .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; animation: fadeUp 0.8s ease 0.3s both; }
+
+        .btn { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--mono); font-size: 0.88rem; font-weight: 500; padding: 0.8rem 1.6rem; border-radius: 8px; text-decoration: none; transition: all 0.25s; cursor: pointer; border: none; }
+        .btn-primary { background: var(--accent); color: #0a0b0f; }
+        .btn-primary:hover { background: #ffaa3b; box-shadow: 0 0 30px rgba(247,147,26,0.3); }
+        .btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border-accent); }
+        .btn-secondary:hover { border-color: var(--text-secondary); background: var(--bg-tertiary); }
+
+        .hero-install { margin-top: 3rem; animation: fadeUp 0.8s ease 0.4s both; }
+        .install-cmd { display: inline-flex; align-items: center; gap: 0.75rem; font-family: var(--mono); font-size: 0.85rem; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); padding: 0.7rem 1.2rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .install-cmd:hover { border-color: var(--border-accent); color: var(--text-primary); }
+        .install-cmd .prompt { color: var(--green); user-select: none; }
+        .install-cmd .copy-hint { color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem; }
+
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* === SHARED SECTION === */
+        section { max-width: 1100px; margin: 0 auto; padding: 6rem 2rem; }
+        .section-label { font-family: var(--mono); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent); margin-bottom: 1rem; }
+        .section-title { font-size: clamp(1.75rem, 3.5vw, 2.25rem); font-weight: 700; letter-spacing: -0.03em; margin-bottom: 1rem; line-height: 1.2; }
+        .section-desc { font-size: 1.05rem; color: var(--text-secondary); max-width: 620px; font-weight: 300; line-height: 1.75; }
+
+        /* === PROBLEM === */
+        .problem { border-top: 1px solid var(--border); }
+        .problem-points { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 3rem; }
+        .problem-point { padding: 2rem; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); }
+        .problem-point .pp-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+        .problem-point h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.6rem; }
+        .problem-point p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.7; }
+
+        /* === WHAT AGENTCERT DOES === */
+        .what-we-do { border-top: 1px solid var(--border); }
+        .what-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 3rem; }
+        .what-card { padding: 2rem; border-radius: 12px; border: 1px solid rgba(247,147,26,0.15); background: rgba(247,147,26,0.02); }
+        .what-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.6rem; }
+        .what-card h3 span { font-size: 1.3rem; }
+        .what-card p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.7; }
+
+        /* === HOW IT WORKS === */
+        .how-it-works { border-top: 1px solid var(--border); }
+        .how-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 3rem; }
+        .how-col { padding: 2.5rem; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); }
+        .how-col-label { font-family: var(--mono); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 1.25rem; }
+        .how-col-label.open { color: var(--green); }
+        .how-col-label.managed { color: var(--accent); }
+        .how-col h3 { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem; }
+        .how-col p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.7; margin-bottom: 1rem; }
+        .how-list { list-style: none; }
+        .how-list li { display: flex; align-items: flex-start; gap: 0.6rem; color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.6rem; line-height: 1.5; }
+        .how-list li::before { content: '→'; color: var(--accent); flex-shrink: 0; font-weight: 600; }
+
+        /* === TRUST MODEL CALLOUT === */
+        .trust-callout { margin-top: 3rem; padding: 2rem 2.5rem; border-radius: 12px; border: 1px solid rgba(52,211,153,0.15); background: rgba(52,211,153,0.03); display: flex; align-items: flex-start; gap: 1.25rem; }
+        .trust-callout-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 0.1rem; }
+        .trust-callout h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.4rem; }
+        .trust-callout p { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.7; }
+
+        /* === USE CASES === */
+        .use-cases { border-top: 1px solid var(--border); }
+        .use-case-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 3rem; }
+        .use-case-card { padding: 2rem; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); transition: border-color 0.25s; }
+        .use-case-card:hover { border-color: var(--border-accent); }
+        .use-case-card .uc-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+        .use-case-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.6rem; }
+        .use-case-card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.65; }
+
+        /* === INTEGRATION === */
+        .integration { border-top: 1px solid var(--border); }
+        .integration-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 3rem; align-items: start; }
+        .code-blocks { display: flex; flex-direction: column; gap: 1rem; }
+        .code-block { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .code-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.25rem; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); }
+        .code-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .code-dot.r { background: #f87171; } .code-dot.y { background: #fbbf24; } .code-dot.g { background: #34d399; }
+        .code-body { padding: 1.5rem; font-family: var(--mono); font-size: 0.8rem; line-height: 1.8; overflow-x: auto; white-space: pre; }
+        .code-body .kw { color: #c792ea; } .code-body .fn { color: #82aaff; } .code-body .str { color: #c3e88d; } .code-body .cmt { color: #546e7a; } .code-body .var { color: #e8e9ed; }
+        .integration-text h3 { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 1rem; }
+        .integration-text p { color: var(--text-secondary); line-height: 1.75; margin-bottom: 1rem; }
+        .check-list { list-style: none; margin-top: 1.5rem; }
+        .check-list li { display: flex; align-items: flex-start; gap: 0.6rem; color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 0.7rem; }
+        .check-list li::before { content: '✓'; color: var(--green); font-weight: 600; flex-shrink: 0; }
+
+        /* === VERIFY === */
+        .verify-section { border-top: 1px solid var(--border); }
+        .verify-box { margin-top: 3rem; padding: 2.5rem; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); text-align: center; }
+        .verify-box h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem; }
+        .verify-box > p { color: var(--text-secondary); max-width: 500px; margin: 0 auto 2rem; line-height: 1.7; font-size: 0.95rem; }
+        .txid-display { display: inline-flex; align-items: center; gap: 0.75rem; font-family: var(--mono); font-size: 0.78rem; color: var(--accent); background: var(--bg-secondary); border: 1px solid rgba(247,147,26,0.2); padding: 0.8rem 1.25rem; border-radius: 8px; text-decoration: none; transition: all 0.2s; word-break: break-all; }
+        .txid-display:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .txid-label { font-size: 0.82rem; color: var(--text-muted); margin-top: 1rem; }
+
+        /* === RESOURCES === */
+        .resources { border-top: 1px solid var(--border); }
+        .resource-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-top: 3rem; }
+        .resource-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 1.75rem; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); text-decoration: none; transition: all 0.25s; }
+        .resource-card:hover { border-color: var(--border-accent); transform: translateY(-2px); }
+        .resource-card .r-icon { font-size: 1.4rem; }
+        .resource-card .r-title { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); }
+        .resource-card .r-desc { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }
+        .resource-card .r-link { font-family: var(--mono); font-size: 0.78rem; color: var(--accent); margin-top: auto; }
+
+        /* === CTA === */
+        .cta-section { border-top: 1px solid var(--border); text-align: center; }
+        .cta-box { margin-top: 3rem; padding: 3.5rem; border-radius: 16px; border: 1px solid rgba(247,147,26,0.15); background: linear-gradient(135deg, rgba(247,147,26,0.04) 0%, rgba(247,147,26,0.01) 100%); }
+        .cta-box h3 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.75rem; }
+        .cta-box p { color: var(--text-secondary); max-width: 520px; margin: 0 auto 2rem; line-height: 1.7; }
+        .cta-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .cta-detail { font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted); margin-top: 1.5rem; }
+
+        /* === FOOTER === */
+        footer { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-muted); }
+        footer a { color: var(--text-secondary); text-decoration: none; transition: color 0.2s; }
+        footer a:hover { color: var(--text-primary); }
+        .footer-links { display: flex; gap: 1.5rem; }
+        .footer-sub { font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 768px) {
+            .nav-links a:not(.nav-cta) { display: none; }
+            .problem-points, .what-grid, .how-columns, .integration-layout { grid-template-columns: 1fr; }
+            .use-case-grid { grid-template-columns: 1fr; }
+            .resource-grid { grid-template-columns: 1fr 1fr; }
+            .trust-callout { flex-direction: column; }
+            .cta-box { padding: 2rem; }
+            footer { flex-direction: column; gap: 1rem; text-align: center; }
+        }
+        @media (max-width: 480px) { .resource-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+    <div class="nav-inner">
+        <a href="/" class="nav-brand">Agent<span>Cert</span></a>
+        <div class="nav-links">
+            <a href="#problem">Problem</a>
+            <a href="#what-we-do">What We Do</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#use-cases">Use Cases</a>
+            <a href="#integration">Integration</a>
+            <a href="#get-started" class="nav-cta">Get Started →</a>
+        </div>
+    </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-grid"></div>
+    <div class="hero-glow"></div>
+    <div class="hero-content">
+        <div class="hero-badge">
+            Open Protocol <span class="hero-badge-sep">·</span> Developer SDK <span class="hero-badge-sep">·</span> Managed Service
+        </div>
+        <h1>Trust infrastructure<br>for <em>AI agents</em></h1>
+        <p class="hero-sub">
+            Give your AI agents verifiable identity and tamper-proof audit trails.
+            Know who deployed an agent, what it's authorized to do, and exactly what it did — with proof that nobody can alter.
+        </p>
+        <div class="hero-actions">
+            <a href="#get-started" class="btn btn-primary">Get Started</a>
+            <a href="https://github.com/shaleenchauhan/agentcert" class="btn btn-secondary" target="_blank">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+        </div>
+        <div class="hero-install">
+            <div class="install-cmd" onclick="navigator.clipboard.writeText('pip install agentcert'); this.querySelector('.copy-hint').textContent = 'copied!'">
+                <span class="prompt">$</span>
+                pip install agentcert
+                <span class="copy-hint">click to copy</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem" id="problem">
+    <div class="section-label">The Problem</div>
+    <h2 class="section-title">Agents are becoming autonomous — but the trust layer is missing</h2>
+    <p class="section-desc">
+        AI agents are making decisions, calling APIs, and executing transactions on behalf of people and companies. As their autonomy grows, a fundamental gap has emerged.
+    </p>
+    <div class="problem-points">
+        <div class="problem-point">
+            <div class="pp-icon">🤖</div>
+            <h3>Agents have no identity</h3>
+            <p>Humans have passports. Websites have TLS certificates. Agents have nothing. There's no standard way to verify who deployed an agent, what it's authorized to do, or whether its credentials are still valid.</p>
+        </div>
+        <div class="problem-point">
+            <div class="pp-icon">📝</div>
+            <h3>There's no verifiable record</h3>
+            <p>When an agent takes an action, the only record lives in application logs that can be edited or deleted. There's no tamper-proof way to answer "what exactly did this agent do?" — for compliance, for dispute resolution, or for building trust.</p>
+        </div>
+    </div>
+</section>
+
+<!-- WHAT AGENTCERT DOES -->
+<section class="what-we-do" id="what-we-do">
+    <div class="section-label">What AgentCert Does</div>
+    <h2 class="section-title">Identity and audit trails for AI agents</h2>
+    <p class="section-desc">
+        Two building blocks that give agents a verifiable foundation — anchored to the Bitcoin blockchain so the proof is permanent and independent.
+    </p>
+    <div class="what-grid">
+        <div class="what-card">
+            <h3><span>🪪</span> Verifiable Identity</h3>
+            <p>Give each agent a certificate that records who created it, what it's capable of, what constraints it operates under, and when it expires. The certificate is signed by the creator and anchored to Bitcoin — anyone can verify it independently, forever.</p>
+        </div>
+        <div class="what-card">
+            <h3><span>📋</span> Tamper-Proof Audit Trails</h3>
+            <p>Every action an agent takes is signed and recorded. Actions are collected and batched together, then anchored to Bitcoin — creating a permanent, independently verifiable record. Tamper with any entry and the proof breaks. Confidential details stay private.</p>
+        </div>
+    </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works" id="how-it-works">
+    <div class="section-label">How It Works</div>
+    <h2 class="section-title">Open SDK. Managed service.</h2>
+    <p class="section-desc">
+        The protocol and SDK are open — verification should never require trusting us. The managed service handles the infrastructure so you don't have to.
+    </p>
+    <div class="how-columns">
+        <div class="how-col">
+            <div class="how-col-label open">Open Source SDK</div>
+            <h3>Instrument your agents</h3>
+            <p>Install the Python SDK and integrate with your existing agent framework. The SDK handles identity generation, action signing, and trail construction locally on your machine.</p>
+            <ul class="how-list">
+                <li>Generate agent identity certificates</li>
+                <li>Sign every action with the agent's private key</li>
+                <li>Framework-agnostic — works with LangChain, CrewAI, or custom agents</li>
+                <li>Works fully offline — no service dependency required</li>
+                <li>Verification logic is open and auditable</li>
+            </ul>
+        </div>
+        <div class="how-col">
+            <div class="how-col-label managed">Managed Anchoring Service</div>
+            <h3>We handle the rest</h3>
+            <p>Submit signed entries to the AgentCert service. We batch them, anchor them to Bitcoin, store the proofs, and give you a dashboard to browse and verify everything.</p>
+            <ul class="how-list">
+                <li>Automatic batching — thousands of entries per transaction</li>
+                <li>Bitcoin anchoring — permanent, independent proof</li>
+                <li>Verification API and dashboard</li>
+                <li>No need to manage Bitcoin infrastructure</li>
+                <li>Self-hostable if you prefer to run your own</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Trust model -->
+    <div class="trust-callout">
+        <div class="trust-callout-icon">🔐</div>
+        <div>
+            <h3>Your keys never leave your machine</h3>
+            <p>Entries are signed locally before being submitted to the service. The service can validate signatures but cannot forge them. Even if the service is compromised, your audit trail remains intact. Verification is fully independent — anyone can confirm authenticity without trusting us or anyone else.</p>
+        </div>
+    </div>
+</section>
+
+<!-- USE CASES -->
+<section class="use-cases" id="use-cases">
+    <div class="section-label">Use Cases</div>
+    <h2 class="section-title">Why it matters</h2>
+    <div class="use-case-grid">
+        <div class="use-case-card">
+            <div class="uc-icon">🇪🇺</div>
+            <h3>Regulatory Compliance</h3>
+            <p>The EU AI Act (Article 12) requires tamper-resistant audit trails for high-risk AI systems. AgentCert provides this out of the box — verifiable, tamper-proof, and anchored to an independent trust layer.</p>
+        </div>
+        <div class="use-case-card">
+            <div class="uc-icon">🤝</div>
+            <h3>Agent-to-Agent Trust</h3>
+            <p>When agents interact with each other — exchanging data, triggering actions, making requests — how do they know who they're dealing with? AgentCert gives agents verifiable identity so trust can be established before interaction.</p>
+        </div>
+        <div class="use-case-card">
+            <div class="uc-icon">⚖️</div>
+            <h3>Dispute Resolution</h3>
+            <p>When something goes wrong — a bad transaction, an incorrect decision, an unauthorized action — having a tamper-proof record of what happened and why is the difference between "we think" and "we can prove."</p>
+        </div>
+    </div>
+</section>
+
+<!-- INTEGRATION -->
+<section class="integration" id="integration">
+    <div class="section-label">Integration</div>
+    <h2 class="section-title">Add trust to your agent in minutes</h2>
+    <p class="section-desc">
+        Wrap your existing agent with the SDK, then submit to the managed service for anchoring. Your agent code stays untouched.
+    </p>
+    <div class="integration-layout">
+        <div class="code-blocks">
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-dot r"></span><span class="code-dot y"></span><span class="code-dot g"></span>
+                    &nbsp; 1. Instrument your agent
+                </div>
+                <div class="code-body"><span class="kw">from</span> <span class="fn">agentcert</span> <span class="kw">import</span> <span class="fn">AgentCertificate</span>, <span class="fn">AuditTrail</span>
+
+<span class="cmt"># Create an identity for your agent</span>
+<span class="var">cert</span> = <span class="fn">AgentCertificate</span>(
+    <span class="var">agent_name</span>=<span class="str">"procurement-agent-v1"</span>,
+    <span class="var">capabilities</span>=[<span class="str">"procurement"</span>],
+    <span class="var">constraints</span>=[<span class="str">"max-50k-usd"</span>],
+)
+
+<span class="cmt"># Record actions as your agent runs</span>
+<span class="var">trail</span> = <span class="fn">AuditTrail</span>(<span class="var">cert</span>)
+<span class="var">trail</span>.<span class="fn">record</span>(<span class="str">"API_CALL"</span>, <span class="str">"Fetched vendor pricing"</span>)
+<span class="var">trail</span>.<span class="fn">record</span>(<span class="str">"DECISION"</span>, <span class="str">"Selected lowest bid"</span>)</div>
+            </div>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-dot r"></span><span class="code-dot y"></span><span class="code-dot g"></span>
+                    &nbsp; 2. Submit for anchoring
+                </div>
+                <div class="code-body"><span class="kw">from</span> <span class="fn">agentcert.client</span> <span class="kw">import</span> <span class="fn">AgentCertClient</span>
+
+<span class="cmt"># Submit to the managed service</span>
+<span class="var">client</span> = <span class="fn">AgentCertClient</span>(<span class="str">"https://agentcert.dev"</span>)
+<span class="var">client</span>.<span class="fn">register_certificate</span>(<span class="var">cert</span>)
+<span class="var">client</span>.<span class="fn">submit_trail</span>(<span class="var">trail</span>)
+<span class="cmt"># → batched and anchored to Bitcoin</span></div>
+            </div>
+        </div>
+        <div class="integration-text">
+            <h3>Works with any agent framework</h3>
+            <p>
+                The SDK is framework-agnostic — use it with LangChain, LangGraph, CrewAI, AutoGen, or your own custom agents. It observes and records, never modifies your agent's behavior.
+            </p>
+            <ul class="check-list">
+                <li>LangChain middleware available for automatic capture</li>
+                <li>Direct API for any Python-based agent</li>
+                <li>Confidential data stored as hashes — content never exposed</li>
+                <li>SDK works fully offline — no service dependency</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- VERIFY YOURSELF -->
+<section class="verify-section">
+    <div class="section-label">Don't Trust Us. Verify.</div>
+    <h2 class="section-title">See it on the Bitcoin blockchain</h2>
+    <p class="section-desc">
+        This isn't theoretical. Click the link below to see a real Bitcoin transaction containing a real AgentCert identity certificate fingerprint.
+    </p>
+    <div class="verify-box">
+        <h3>Real agent certificate. Real Bitcoin transaction.</h3>
+        <p>This transaction contains the fingerprint of an actual AgentCert identity certificate. The certificate, the fingerprint, and the Bitcoin transaction are independently verifiable by anyone.</p>
+        <a href="https://blockstream.info/testnet/tx/6b3b8cd6624d833e98add57823a7a8ba72134a9de4aae6b7eb7617ebd7cb771c" target="_blank" class="txid-display">
+            6b3b8cd6...ebd7cb771c &nbsp;→ View on Blockstream
+        </a>
+        <div class="txid-label">Bitcoin testnet · Independently verifiable</div>
+    </div>
+</section>
+
+<!-- RESOURCES -->
+<section class="resources" id="resources">
+    <div class="section-label">Resources</div>
+    <h2 class="section-title">Dive deeper</h2>
+    <div class="resource-grid">
+        <a href="https://github.com/shaleenchauhan/agentcert" target="_blank" class="resource-card">
+            <span class="r-icon">📦</span>
+            <span class="r-title">GitHub Repository</span>
+            <span class="r-desc">Source code, SDK documentation, and protocol spec.</span>
+            <span class="r-link">github.com →</span>
+        </a>
+        <a href="https://github.com/shaleenchauhan/agentcert/blob/main/papers/whitepaper.pdf" target="_blank" class="resource-card">
+            <span class="r-icon">📄</span>
+            <span class="r-title">Whitepaper</span>
+            <span class="r-desc">68 pages on the protocol design and why Bitcoin is the necessary trust anchor.</span>
+            <span class="r-link">Read paper →</span>
+        </a>
+        <a href="https://shaleenchauhan.substack.com/p/i-gave-an-ai-agent-a-bitcoin-anchored" target="_blank" class="resource-card">
+            <span class="r-icon">✍️</span>
+            <span class="r-title">Blog Post</span>
+            <span class="r-desc">The story behind giving an AI agent a Bitcoin-anchored birth certificate.</span>
+            <span class="r-link">Read on Substack →</span>
+        </a>
+        <a href="https://pypi.org/project/agentcert/" target="_blank" class="resource-card">
+            <span class="r-icon">🐍</span>
+            <span class="r-title">PyPI Package</span>
+            <span class="r-desc">Install with pip. Identity, audit trails, framework integrations, and service client.</span>
+            <span class="r-link">pypi.org →</span>
+        </a>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="get-started">
+    <div class="section-label">Get Started</div>
+    <h2 class="section-title">See AgentCert running with your agent</h2>
+    <div class="cta-box">
+        <h3>Book a 15-minute walkthrough</h3>
+        <p>
+            Whether you need tamper-proof audit trails for compliance, verifiable identity for your agents, or a permanent record for dispute resolution — we can have a pilot running with your stack in a day.
+        </p>
+        <div class="cta-actions">
+            <a href="#" class="btn btn-primary" onclick="navigator.clipboard.writeText('shaleen@agentcert.dev'); this.textContent='Email copied!'; setTimeout(() => this.textContent='Let\'s Talk →', 2000); return false;">Let's Talk →</a>
+        </div>
+        <div class="cta-email" style="margin-top: 1.5rem; font-family: var(--mono); font-size: 0.9rem;">
+            <span style="color: var(--text-muted);">reach out at</span>
+            <span style="color: var(--accent); margin-left: 0.4rem; cursor: pointer;" onclick="navigator.clipboard.writeText('shaleen@agentcert.dev'); this.textContent='copied!'; setTimeout(() => this.textContent='shaleen@agentcert.dev', 2000);">shaleen@agentcert.dev</span>
+        </div>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+    <div>
+        <span style="color: var(--text-secondary);">AgentCert</span> · Built by <a href="https://x.com/chauhan_shaleen" target="_blank">Shaleen Chauhan</a>
+        <div class="footer-sub">Open protocol · Managed service · Bitcoin-anchored</div>
+    </div>
+    <div class="footer-links">
+        <a href="https://github.com/shaleenchauhan/agentcert" target="_blank">GitHub</a>
+        <a href="https://pypi.org/project/agentcert/" target="_blank">PyPI</a>
+        <a href="https://shaleenchauhan.substack.com" target="_blank">Blog</a>
+        <a href="https://x.com/chauhan_shaleen" target="_blank">X</a>
+    </div>
+</footer>
+
+<script>
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => { nav.classList.toggle('scrolled', window.scrollY > 50); });
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+        a.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(a.getAttribute('href')); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    });
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => { if (entry.isIntersecting) { entry.target.style.opacity = '1'; entry.target.style.transform = 'translateY(0)'; } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.problem-point, .what-card, .how-col, .use-case-card, .code-block, .integration-text, .cta-box, .verify-box, .trust-callout, .resource-card').forEach(el => {
+        el.style.opacity = '0'; el.style.transform = 'translateY(20px)'; el.style.transition = 'opacity 0.6s ease, transform 0.6s ease'; observer.observe(el);
+    });
+</script>
+</body>
+</html>

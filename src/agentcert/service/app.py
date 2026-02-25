@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import agentcert
@@ -65,12 +65,6 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     app.state.db = db
     app.state.config = config
     app.state.scheduler = scheduler
-
-    # ── Root Redirect ────────────────────────────────────────────────────
-
-    @app.get("/")
-    async def root():
-        return RedirectResponse(url="/dashboard/")
 
     # ── Certificate Endpoints ───────────────────────────────────────────
 
