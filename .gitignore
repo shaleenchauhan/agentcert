@@ -30,8 +30,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Project
-CLAUDE.md
+# Private project memory (lives in agentcert-internal repo)
+docs/memory/
+docs/reference/REPO_AUDIT_REPORT.md
 
 # Keys and certs (never commit real keys)
 *.keys.json
