@@ -574,8 +574,8 @@ agentcert/
     batch.py             # Batch creation, anchoring, proof verification
     client.py            # SDK client for the anchoring service (httpx)
     service/
-      app.py             # FastAPI application (12 API endpoints + dashboard)
-      dashboard.py       # Dashboard route handlers (7 pages)
+      app.py             # FastAPI application (13 API endpoints + dashboard)
+      dashboard.py       # Dashboard route handlers (8 pages)
       models.py          # SQLite database layer
       scheduler.py       # Background batching + anchoring scheduler
       config.py          # ServiceConfig dataclass
@@ -610,7 +610,7 @@ AgentCert implements AIT-1 from the Agent Internet Trust protocol. The research 
 
 - [**Whitepaper**](papers/whitepaper.pdf) — Protocol motivation, architecture, trust model, and threat analysis
 - [**Condensed Overview**](papers/condensed.pdf) — Shorter summary of the protocol and its design rationale
-- [**Technical Specification**](papers/technical-spec.pdf) — Formal specification of certificate structure, signing, anchoring, and verification
+- **Technical Specification** — Formal specification of certificate structure, signing, anchoring, and verification *(not yet published)*
 
 ## License
 
