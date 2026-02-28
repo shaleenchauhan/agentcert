@@ -388,6 +388,7 @@ API endpoints:
 | GET | `/api/v1/batches/{id}` | Get batch details |
 | GET | `/api/v1/batches/latest` | Latest batch |
 | POST | `/api/v1/admin/force-batch` | Force batch cycle |
+| POST | `/api/v1/admin/import-batch` | Import an existing batch |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/stats` | Statistics |
 
@@ -404,6 +405,7 @@ Open `http://localhost:8932/dashboard` after starting the service.
 | Overview | `/dashboard` | Stats cards, recent activity, recent batches |
 | Agents | `/dashboard/agents` | All registered certificates with entry counts and risk tiers |
 | Agent Detail | `/dashboard/agents/{cert_id}` | Certificate info + full audit trail table |
+| Entries | `/dashboard/entries` | All entries with agent and status filters |
 | Entry Detail | `/dashboard/entries/{entry_id}` | Entry info, verification panel, Merkle proof path, Bitcoin anchor |
 | Batches | `/dashboard/batches` | All Merkle batches with anchor status |
 | Batch Detail | `/dashboard/batches/{batch_id}` | Batch info + list of entries |
@@ -588,7 +590,7 @@ agentcert/
     cli.py               # Click-based CLI (21 commands)
   tests/                 # 424 tests
   examples/              # quickstart.py, full_lifecycle.py, audit_trail_demo.py, langchain_demo.py, batch_anchor_demo.py, service_demo.py
-  papers/                # Whitepaper, technical spec, condensed overview
+  papers/                # Whitepaper, condensed overview
 ```
 
 ## Technical Decisions
@@ -610,7 +612,6 @@ AgentCert implements AIT-1 from the Agent Internet Trust protocol. The research 
 
 - [**Whitepaper**](papers/whitepaper.pdf) — Protocol motivation, architecture, trust model, and threat analysis
 - [**Condensed Overview**](papers/condensed.pdf) — Shorter summary of the protocol and its design rationale
-- **Technical Specification** — Formal specification of certificate structure, signing, anchoring, and verification *(not yet published)*
 
 ## License
 
