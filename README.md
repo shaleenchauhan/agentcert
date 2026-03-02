@@ -36,9 +36,23 @@ Optional extras:
 
 ```bash
 pip install agentcert[langchain]   # LangChain integration
+pip install agentcert[crewai]      # CrewAI integration
+pip install agentcert[autogen]     # AutoGen integration
 pip install agentcert[service]     # Anchoring service (FastAPI + uvicorn)
 pip install agentcert[client]      # SDK client (httpx)
 ```
+
+## Framework Integrations
+
+AgentCert integrates with the major AI agent frameworks:
+
+| Framework | Package | Install |
+|-----------|---------|---------|
+| LangChain | [agentcert-langchain](packages/agentcert-langchain/) | `pip install agentcert[langchain]` |
+| CrewAI | [agentcert-crewai](packages/agentcert-crewai/) | `pip install agentcert[crewai]` |
+| AutoGen | [agentcert-autogen](packages/agentcert-autogen/) | `pip install agentcert[autogen]` |
+
+Each integration provides identity certificates, signed audit trails, and trust verification for agents in that framework. See individual package READMEs for quickstart guides.
 
 ## Quickstart
 
