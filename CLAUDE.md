@@ -8,7 +8,7 @@ AgentCert provides cryptographic identity certificates, tamper-proof audit trail
 
 ## Architecture
 
-Developer's LangChain Agent → AgentCert SDK (local signing) → AgentCert Service (FastAPI + SQLite) → Bitcoin (OP_RETURN anchor)
+Developer's Agent (LangChain/CrewAI/AutoGen) → AgentCert Middleware (local signing, storage="both") → AgentCert Service (FastAPI + SQLite at api.agentcert.dev) → Bitcoin (OP_RETURN anchor)
 
 ## Project Structure
 
@@ -28,7 +28,7 @@ src/agentcert/              # 19 source modules
 ├── types.py                # 18 types (2 IntEnums + 16 dataclasses)
 ├── exceptions.py           # 13 custom exceptions
 ├── integrations/
-│   └── langchain.py        # AgentCertCallbackHandler + AgentCertMiddleware
+│   └── langchain.py        # Backward-compat shim (re-exports from agentcert-langchain)
 └── service/
     ├── app.py              # FastAPI, 13 REST endpoints
     ├── models.py           # SQLite, 4 tables, 25 query methods
@@ -38,6 +38,11 @@ src/agentcert/              # 19 source modules
     ├── templates/          # 9 Jinja2 templates
     └── static/             # style.css + main.js
 tests/                      # 15 files, 424 tests
+packages/                       # Framework integration packages
+├── agentcert-middleware/       # Shared base (storage, retry, trust, coordinator)
+├── agentcert-langchain/        # LangChain integration (37 tests)
+├── agentcert-crewai/           # CrewAI integration (37 tests)
+└── agentcert-autogen/          # AutoGen integration (47 tests)
 demo/                       # 5 demo agents
 papers/                     # whitepaper.pdf, condensed.pdf
 ```
@@ -46,7 +51,7 @@ papers/                     # whitepaper.pdf, condensed.pdf
 
 | Metric | Value |
 |--------|-------|
-| Tests | 424 |
+| Tests | 424 (core) + 258 (framework packages) = 682 total |
 | API exports | 72 |
 | CLI commands | 21 |
 | REST endpoints | 13 |
@@ -58,7 +63,7 @@ papers/                     # whitepaper.pdf, condensed.pdf
 - **SDK:** Python 3.11+, cryptography, requests, click
 - **Service:** FastAPI, SQLite, Jinja2, uvicorn
 - **Client:** httpx
-- **Integration:** langchain-core (optional)
+- **Integration:** langchain-core, crewai, autogen-agentchat (all optional, via `pip install agentcert[langchain/crewai/autogen]`)
 - **Bitcoin:** SegWit P2WPKH, Blockstream Esplora API
 - **Testing:** pytest, responses (HTTP mocking)
 
@@ -82,7 +87,8 @@ papers/                     # whitepaper.pdf, condensed.pdf
 ## Commands
 
 ```bash
-pytest tests/                           # All 424 tests
+pytest tests/                           # Core tests (424)
+pytest packages/                        # Framework package tests (258)
 pytest tests/ --cov=agentcert          # With coverage
 agentcert service start --port 8932    # Start FastAPI server
 agentcert --help                       # All CLI commands
