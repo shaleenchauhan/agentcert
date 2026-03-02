@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentcert-crewai"
+version = "0.1.0"
+description = "AgentCert trust infrastructure integration for CrewAI agents and crews"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Shaleen Chauhan", email = "shaleen@agentcert.dev" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+dependencies = [
+    "agentcert-middleware>=0.1.0",
+    "crewai>=0.80.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/shaleenchauhan/agentcert"
+Repository = "https://github.com/shaleenchauhan/agentcert/tree/main/packages/agentcert-crewai"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentcert_crewai"]
