@@ -622,7 +622,11 @@ agentcert/
 
 ## Research
 
-AgentCert implements AIT-1 from the Agent Internet Trust protocol. The research papers cover the full protocol design, adversarial analysis, and technical specification:
+**[Anchoring the Agentic Internet](https://www.authorea.com/users/1033372/articles/1393198-anchoring-the-agentic-internet)** — Preprint on TechRxiv (March 2026)
+
+Why the internet's trust architecture breaks for autonomous AI agents, and how Bitcoin's proof-of-work provides the foundation for agent identity, audit trails, and decentralized verification.
+
+AgentCert implements AIT-1 from the Agent Internet Trust protocol. Additional papers:
 
 - [**Whitepaper**](papers/whitepaper.pdf) — Protocol motivation, architecture, trust model, and threat analysis
 - [**Condensed Overview**](papers/condensed.pdf) — Shorter summary of the protocol and its design rationale
